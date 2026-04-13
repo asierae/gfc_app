@@ -1,0 +1,375 @@
+<mat-toolbar color="primary" class="main-toolbar">
+  <span>Fishbrain GFC</span>
+  <span class="spacer"></span>
+
+  <input type="file" (change)="importExcel($event)" accept=".xlsx, .xls" #fileInput hidden>
+  <button mat-stroked-button color="accent" class="import-btn" (click)="fileInput.click()" style="margin-right: 12px; border-color: rgba(255,255,255,0.5); color: white;">
+    <mat-icon>upload_file</mat-icon>
+    Import Excel
+  </button>
+
+  <button mat-stroked-button (click)="clearData()" style="margin-right: 12px; border-color: rgba(255,100,100,0.6); color: #fca5a5;">
+    <mat-icon>delete_sweep</mat-icon>
+    Clear Data
+  </button>
+
+  <button mat-flat-button color="accent" class="export-btn pulse-animation" (click)="exportToExcel(false)">
+    <mat-icon>download</mat-icon>
+    Export Full Table
+  </button>
+</mat-toolbar>
+
+<!-- Toast Notification -->
+<div class="toast-container" [class.toast-visible]="toast.visible" [ngClass]="'toast-' + toast.type">
+  <mat-icon class="toast-icon">{{ toast.type === 'success' ? 'check_circle' : toast.type === 'error' ? 'error' : 'info' }}</mat-icon>
+  <span class="toast-message">{{ toast.message }}</span>
+  <button mat-icon-button class="toast-close" (click)="dismissToast()">
+    <mat-icon style="font-size: 18px; line-height: 18px;">close</mat-icon>
+  </button>
+</div>
+
+<div class="main-container">
+  <mat-card class="content-card">
+    <mat-card-header>
+      <mat-card-title>Data Export Selection</mat-card-title>
+      <mat-card-subtitle>Select the columns you'd like to export or view below.</mat-card-subtitle>
+    </mat-card-header>
+
+    <mat-card-content>
+      <div class="column-selectors">
+        <div class="selector-group">
+          <mat-checkbox [(ngModel)]="columnVisibility.applicant" (change)="updateDisplayedColumns(); saveColumnVisibility()" color="primary">Applicant</mat-checkbox>
+          <mat-checkbox [(ngModel)]="columnVisibility.acronym" (change)="updateDisplayedColumns(); saveColumnVisibility()" color="primary">Acronym</mat-checkbox>
+          <mat-checkbox [(ngModel)]="columnVisibility.entityType" (change)="updateDisplayedColumns(); saveColumnVisibility()" color="primary">Entity Type</mat-checkbox>
+          <mat-checkbox [(ngModel)]="columnVisibility.submittedAt" (change)="updateDisplayedColumns(); saveColumnVisibility()" color="primary">Submitted At</mat-checkbox>
+          <mat-checkbox [(ngModel)]="columnVisibility.preScreening" (change)="updateDisplayedColumns(); saveColumnVisibility()" color="primary">Pre-Screening</mat-checkbox>
+          <mat-checkbox [(ngModel)]="columnVisibility.profiles" (change)="updateDisplayedColumns(); saveColumnVisibility()" color="primary">Profiles</mat-checkbox>
+        </div>
+        <div class="selector-group">
+          <mat-checkbox [(ngModel)]="columnVisibility.country" (change)="updateDisplayedColumns(); saveColumnVisibility()" color="primary">Country</mat-checkbox>
+          <mat-checkbox [(ngModel)]="columnVisibility.address" (change)="updateDisplayedColumns(); saveColumnVisibility()" color="primary">Address</mat-checkbox>
+          <mat-checkbox [(ngModel)]="columnVisibility.nolStatus" (change)="updateDisplayedColumns(); saveColumnVisibility()" color="primary">NOL Status</mat-checkbox>
+          <mat-checkbox [(ngModel)]="columnVisibility.hatyjaReviewComments" (change)="updateDisplayedColumns(); saveColumnVisibility()" color="primary">Hatyja Review</mat-checkbox>
+          <mat-checkbox [(ngModel)]="columnVisibility.redFlags" (change)="updateDisplayedColumns(); saveColumnVisibility()" color="primary">Red Flags</mat-checkbox>
+          <mat-checkbox [(ngModel)]="columnVisibility.passed" (change)="updateDisplayedColumns(); saveColumnVisibility()" color="primary">Passed</mat-checkbox>
+        </div>
+        <div class="selector-group">
+          <mat-checkbox [(ngModel)]="columnVisibility.djResult" (change)="updateDisplayedColumns(); saveColumnVisibility()" color="primary">DJ-Result</mat-checkbox>
+          <mat-checkbox [(ngModel)]="columnVisibility.djReportNumber" (change)="updateDisplayedColumns(); saveColumnVisibility()" color="primary">DJ report number</mat-checkbox>
+          <mat-checkbox [(ngModel)]="columnVisibility.djReportLink" (change)="updateDisplayedColumns(); saveColumnVisibility()" color="primary">DJ report link</mat-checkbox>
+          <mat-checkbox [(ngModel)]="columnVisibility.djTruePositive" (change)="updateDisplayedColumns(); saveColumnVisibility()" color="primary">DJ: True positive</mat-checkbox>
+          <mat-checkbox [(ngModel)]="columnVisibility.djFalsePositive" (change)="updateDisplayedColumns(); saveColumnVisibility()" color="primary">DJ: False positive</mat-checkbox>
+          <mat-checkbox [(ngModel)]="columnVisibility.escalationRequired" (change)="updateDisplayedColumns(); saveColumnVisibility()" color="primary">Escalation Required</mat-checkbox>
+          <mat-checkbox [(ngModel)]="columnVisibility.hatyjaComments" (change)="updateDisplayedColumns(); saveColumnVisibility()" color="primary">Hatyja comments</mat-checkbox>
+        </div>
+      </div>
+
+      <div class="action-row">
+        <button mat-stroked-button color="primary" class="export-selected-btn" (click)="exportToExcel(true)" style="margin-right: 12px;">
+          <mat-icon>file_download</mat-icon>
+          Export Selected Columns
+        </button>
+        <button mat-flat-button color="primary" class="copy-clipboard-btn" (click)="copyTableToClipboard(true)">
+          <mat-icon>content_copy</mat-icon>
+          Copy for Excel (Selected)
+        </button>
+      </div>
+    </mat-card-content>
+  </mat-card>
+
+  <!-- SEARCH BAR -->
+  <div class="search-bar-wrapper">
+    <mat-icon class="search-icon">search</mat-icon>
+    <input
+      #searchInput
+      class="search-input"
+      type="text"
+      placeholder="Search across all columns…"
+      (input)="applyFilter($event)">
+    <button *ngIf="searchInput.value" mat-icon-button class="clear-search-btn" (click)="clearSearch(searchInput)">
+      <mat-icon>close</mat-icon>
+    </button>
+  </div>
+
+  <mat-card class="table-card">
+    <div class="table-container">
+      <table mat-table [dataSource]="dataSource" matSort class="mat-elevation-z8 premium-table">
+
+        <!-- Applicant Column -->
+        <ng-container matColumnDef="applicant">
+          <th mat-header-cell *matHeaderCellDef mat-sort-header [hidden]="!columnVisibility.applicant">
+            Applicant
+            <div #resizerApp class="custom-resizer" (mousedown)="initResize($event, resizerApp)"></div>
+          </th>
+          <td mat-cell *matCellDef="let element" [hidden]="!columnVisibility.applicant">
+            <input type="text" [(ngModel)]="element.applicant" class="editable-cell bold-text" (blur)="saveToStorage()">
+          </td>
+        </ng-container>
+
+        <!-- Acronym Column -->
+        <ng-container matColumnDef="acronym">
+          <th mat-header-cell *matHeaderCellDef mat-sort-header [hidden]="!columnVisibility.acronym">
+            Acronym
+            <div #resizerAcr class="custom-resizer" (mousedown)="initResize($event, resizerAcr)"></div>
+          </th>
+          <td mat-cell *matCellDef="let element" [hidden]="!columnVisibility.acronym">
+            <input type="text" [(ngModel)]="element.acronym" class="editable-cell text-muted" (blur)="saveToStorage()">
+          </td>
+        </ng-container>
+
+        <!-- Entity Type Column -->
+        <ng-container matColumnDef="entityType">
+          <th mat-header-cell *matHeaderCellDef mat-sort-header [hidden]="!columnVisibility.entityType">
+            Entity Type
+            <div #resizerEnt class="custom-resizer" (mousedown)="initResize($event, resizerEnt)"></div>
+          </th>
+          <td mat-cell *matCellDef="let element" [hidden]="!columnVisibility.entityType">
+            <input type="text" [(ngModel)]="element.entityType" class="editable-cell text-primary" (blur)="saveToStorage()">
+          </td>
+        </ng-container>
+
+        <!-- Submitted At Column -->
+        <ng-container matColumnDef="submittedAt">
+          <th mat-header-cell *matHeaderCellDef mat-sort-header [hidden]="!columnVisibility.submittedAt">
+            Submitted At
+            <div #resizerSub class="custom-resizer" (mousedown)="initResize($event, resizerSub)"></div>
+          </th>
+          <td mat-cell *matCellDef="let element" [hidden]="!columnVisibility.submittedAt">
+            <div class="date-cell">
+              <input matInput [matDatepicker]="picker" [(ngModel)]="element.submittedAt" (dateChange)="saveToStorage()" class="editable-cell date-input">
+              <mat-datepicker-toggle matSuffix [for]="picker"></mat-datepicker-toggle>
+              <mat-datepicker #picker></mat-datepicker>
+            </div>
+          </td>
+        </ng-container>
+
+        <!-- Pre-Screening Column -->
+        <ng-container matColumnDef="preScreening">
+          <th mat-header-cell *matHeaderCellDef mat-sort-header [hidden]="!columnVisibility.preScreening">
+            Pre-Screening
+            <div #resizerPre class="custom-resizer" (mousedown)="initResize($event, resizerPre)"></div>
+          </th>
+          <td mat-cell *matCellDef="let element" [hidden]="!columnVisibility.preScreening">
+            <input type="text" [(ngModel)]="element.preScreening" class="editable-cell" (blur)="saveToStorage()">
+          </td>
+        </ng-container>
+
+        <!-- Profiles Column -->
+        <ng-container matColumnDef="profiles">
+          <th mat-header-cell *matHeaderCellDef mat-sort-header [hidden]="!columnVisibility.profiles">
+            Profiles
+            <div #resizerProf class="custom-resizer" (mousedown)="initResize($event, resizerProf)"></div>
+          </th>
+          <td mat-cell *matCellDef="let element" [hidden]="!columnVisibility.profiles">
+            <div class="url-cell">
+              <input type="url" [(ngModel)]="element.profiles" class="editable-cell url-input" (blur)="saveToStorage()">
+              <a *ngIf="element.profiles" [href]="element.profiles" target="_blank" class="url-link-btn">
+                <mat-icon>open_in_new</mat-icon>
+              </a>
+            </div>
+          </td>
+        </ng-container>
+
+        <!-- Country Column -->
+        <ng-container matColumnDef="country">
+          <th mat-header-cell *matHeaderCellDef mat-sort-header [hidden]="!columnVisibility.country">
+            Country
+            <div #resizerCou class="custom-resizer" (mousedown)="initResize($event, resizerCou)"></div>
+          </th>
+          <td mat-cell *matCellDef="let element" [hidden]="!columnVisibility.country">
+            <div class="cell-content">
+              <mat-icon class="small-icon">public</mat-icon>
+              <input type="text" [(ngModel)]="element.country" class="editable-cell" (blur)="saveToStorage()">
+            </div>
+          </td>
+        </ng-container>
+
+        <!-- Address Column -->
+        <ng-container matColumnDef="address">
+          <th mat-header-cell *matHeaderCellDef mat-sort-header [hidden]="!columnVisibility.address">
+            Address
+            <div #resizerAdd class="custom-resizer" (mousedown)="initResize($event, resizerAdd)"></div>
+          </th>
+          <td mat-cell *matCellDef="let element" [hidden]="!columnVisibility.address">
+            <div class="cell-content">
+              <mat-icon class="small-icon">place</mat-icon>
+              <input type="text" [(ngModel)]="element.address" class="editable-cell text-muted" (blur)="saveToStorage()">
+            </div>
+          </td>
+        </ng-container>
+
+        <!-- NOL Status Column -->
+        <ng-container matColumnDef="nolStatus">
+          <th mat-header-cell *matHeaderCellDef mat-sort-header [hidden]="!columnVisibility.nolStatus">
+            NOL Status
+            <div #resizerNol class="custom-resizer" (mousedown)="initResize($event, resizerNol)"></div>
+          </th>
+          <td mat-cell *matCellDef="let element" [hidden]="!columnVisibility.nolStatus">
+            <input type="text" [(ngModel)]="element.nolStatus" class="editable-cell status-input"
+              [ngClass]="element.nolStatus === 'Active' ? 'status-active' : (element.nolStatus === 'Pending' ? 'status-pending' : 'status-inactive')"
+              (blur)="saveToStorage()">
+          </td>
+        </ng-container>
+
+        <!-- Hatyja Review comments Column -->
+        <ng-container matColumnDef="hatyjaReviewComments">
+          <th mat-header-cell *matHeaderCellDef mat-sort-header [hidden]="!columnVisibility.hatyjaReviewComments">
+            Hatyja Review
+            <div #resizerHat class="custom-resizer" (mousedown)="initResize($event, resizerHat)"></div>
+          </th>
+          <td mat-cell *matCellDef="let element" [hidden]="!columnVisibility.hatyjaReviewComments" class="review-cell">
+            <div class="review-container">
+              <!-- View mode: standard input -->
+              <input *ngIf="element !== editingReviewElement || !element.isEditingReview" 
+                type="text" 
+                [(ngModel)]="element.hatyjaReviewComments" 
+                class="editable-cell text-muted view-input" 
+                (click)="toggleReviewEdit(element, 'isEditingReview', $event)"
+                readonly>
+
+              <!-- Edit mode: popup textarea -->
+              <textarea *ngIf="element === editingReviewElement && element.isEditingReview"
+                [(ngModel)]="element.hatyjaReviewComments"
+                class="premium-textarea"
+                (blur)="closeReviewEdit()"
+                (mouseleave)="closeReviewEdit()"
+                rows="4"></textarea>
+            </div>
+          </td>
+        </ng-container>
+
+        <!-- Red Flags Column -->
+        <ng-container matColumnDef="redFlags">
+          <th mat-header-cell *matHeaderCellDef mat-sort-header [hidden]="!columnVisibility.redFlags">
+            Red Flags
+            <div #resizerRed class="custom-resizer" (mousedown)="initResize($event, resizerRed)"></div>
+          </th>
+          <td mat-cell *matCellDef="let element" [hidden]="!columnVisibility.redFlags">
+            <div class="cell-content" [ngClass]="{'text-danger font-weight-bold': element.redFlags !== 'None'}">
+              <mat-icon *ngIf="element.redFlags !== 'None'" class="small-icon error-icon">warning</mat-icon>
+              <input type="text" [(ngModel)]="element.redFlags" class="editable-cell" [ngClass]="{'text-danger': element.redFlags !== 'None'}" (blur)="saveToStorage()">
+            </div>
+          </td>
+        </ng-container>
+
+        <!-- Passed Column -->
+        <ng-container matColumnDef="passed">
+          <th mat-header-cell *matHeaderCellDef mat-sort-header [hidden]="!columnVisibility.passed">
+            Passed
+            <div #resizerPas class="custom-resizer" (mousedown)="initResize($event, resizerPas)"></div>
+          </th>
+          <td mat-cell *matCellDef="let element" [hidden]="!columnVisibility.passed">
+            <select [(ngModel)]="element.passed" class="editable-cell status-input"
+              [ngClass]="{'status-active': element.passed === 'Accepted', 'status-inactive': element.passed === 'Rejected'}"
+              (change)="saveToStorage()">
+              <option value="" style="background-color: white; color: black;"></option>
+              <option value="Accepted" style="background-color: #dcfce7; color: #15803d; font-weight: 600;">Accepted</option>
+              <option value="Rejected" style="background-color: #fee2e2; color: #b91c1c; font-weight: 600;">Rejected</option>
+            </select>
+          </td>
+        </ng-container>
+
+        <!-- DJ-Result Column -->
+        <ng-container matColumnDef="djResult">
+          <th mat-header-cell *matHeaderCellDef mat-sort-header [hidden]="!columnVisibility.djResult">
+            DJ-Result
+            <div #resizerDjRes class="custom-resizer" (mousedown)="initResize($event, resizerDjRes)"></div>
+          </th>
+          <td mat-cell *matCellDef="let element" [hidden]="!columnVisibility.djResult">
+            <input type="text" [(ngModel)]="element.djResult" class="editable-cell" (blur)="saveToStorage()">
+          </td>
+        </ng-container>
+
+        <!-- DJ report number Column -->
+        <ng-container matColumnDef="djReportNumber">
+          <th mat-header-cell *matHeaderCellDef mat-sort-header [hidden]="!columnVisibility.djReportNumber">
+            DJ report number
+            <div #resizerDjNum class="custom-resizer" (mousedown)="initResize($event, resizerDjNum)"></div>
+          </th>
+          <td mat-cell *matCellDef="let element" [hidden]="!columnVisibility.djReportNumber">
+            <input type="text" [(ngModel)]="element.djReportNumber" class="editable-cell" (blur)="saveToStorage()">
+          </td>
+        </ng-container>
+
+        <!-- DJ report link Column -->
+        <ng-container matColumnDef="djReportLink">
+          <th mat-header-cell *matHeaderCellDef mat-sort-header [hidden]="!columnVisibility.djReportLink">
+            DJ report link
+            <div #resizerDjLnk class="custom-resizer" (mousedown)="initResize($event, resizerDjLnk)"></div>
+          </th>
+          <td mat-cell *matCellDef="let element" [hidden]="!columnVisibility.djReportLink">
+            <div class="url-cell">
+              <input type="url" [(ngModel)]="element.djReportLink" class="editable-cell url-input" (blur)="saveToStorage()">
+              <a *ngIf="element.djReportLink" [href]="element.djReportLink" target="_blank" class="url-link-btn">
+                <mat-icon>open_in_new</mat-icon>
+              </a>
+            </div>
+          </td>
+        </ng-container>
+
+        <!-- DJ: True positive Column -->
+        <ng-container matColumnDef="djTruePositive">
+          <th mat-header-cell *matHeaderCellDef mat-sort-header [hidden]="!columnVisibility.djTruePositive">
+            DJ: True positive
+            <div #resizerDjT class="custom-resizer" (mousedown)="initResize($event, resizerDjT)"></div>
+          </th>
+          <td mat-cell *matCellDef="let element" [hidden]="!columnVisibility.djTruePositive">
+            <input type="text" [(ngModel)]="element.djTruePositive" class="editable-cell" (blur)="saveToStorage()">
+          </td>
+        </ng-container>
+
+        <!-- DJ: False positive Column -->
+        <ng-container matColumnDef="djFalsePositive">
+          <th mat-header-cell *matHeaderCellDef mat-sort-header [hidden]="!columnVisibility.djFalsePositive">
+            DJ: False positive
+            <div #resizerDjF class="custom-resizer" (mousedown)="initResize($event, resizerDjF)"></div>
+          </th>
+          <td mat-cell *matCellDef="let element" [hidden]="!columnVisibility.djFalsePositive">
+            <input type="text" [(ngModel)]="element.djFalsePositive" class="editable-cell" (blur)="saveToStorage()">
+          </td>
+        </ng-container>
+
+        <!-- Escalation required Column -->
+        <ng-container matColumnDef="escalationRequired">
+          <th mat-header-cell *matHeaderCellDef mat-sort-header [hidden]="!columnVisibility.escalationRequired">
+            Escalation Required
+            <div #resizerEsc class="custom-resizer" (mousedown)="initResize($event, resizerEsc)"></div>
+          </th>
+          <td mat-cell *matCellDef="let element" [hidden]="!columnVisibility.escalationRequired">
+            <input type="text" [(ngModel)]="element.escalationRequired" class="editable-cell" (blur)="saveToStorage()">
+          </td>
+        </ng-container>
+
+        <!-- Hatyja comments Column -->
+        <ng-container matColumnDef="hatyjaComments">
+          <th mat-header-cell *matHeaderCellDef mat-sort-header [hidden]="!columnVisibility.hatyjaComments">
+            Hatyja comments
+            <div #resizerHatC class="custom-resizer" (mousedown)="initResize($event, resizerHatC)"></div>
+          </th>
+          <td mat-cell *matCellDef="let element" [hidden]="!columnVisibility.hatyjaComments" class="review-cell">
+            <div class="review-container">
+              <input *ngIf="element !== editingReviewElement || !element.isEditingHatyjaComments" 
+                type="text" 
+                [(ngModel)]="element.hatyjaComments" 
+                class="editable-cell text-muted view-input" 
+                (click)="toggleReviewEdit(element, 'isEditingHatyjaComments', $event)"
+                readonly>
+
+              <textarea *ngIf="element === editingReviewElement && element.isEditingHatyjaComments"
+                [(ngModel)]="element.hatyjaComments"
+                class="premium-textarea"
+                (blur)="closeReviewEdit()"
+                (mouseleave)="closeReviewEdit()"
+                rows="4"></textarea>
+            </div>
+          </td>
+        </ng-container>
+
+        <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+        <tr mat-row *matRowDef="let row; columns: displayedColumns;" class="row-hover"></tr>
+      </table>
+    </div>
+    <mat-paginator [pageSizeOptions]="[10, 20, 50]" showFirstLastButtons aria-label="Select page of applicant records">
+    </mat-paginator>
+  </mat-card>
+</div>
