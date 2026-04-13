@@ -29,71 +29,95 @@
 </div>
 
 <div class="main-container">
-  <mat-card class="content-card">
-    <mat-card-header>
-      <mat-card-title>Data Export Selection</mat-card-title>
-      <mat-card-subtitle>Select the columns you'd like to export or view below.</mat-card-subtitle>
-    </mat-card-header>
+  <mat-expansion-panel class="selection-panel">
+    <mat-expansion-panel-header>
+      <mat-panel-title>
+        <mat-icon style="margin-right: 8px; color: #64748b;">settings</mat-icon>
+        Column Visibility Settings
+      </mat-panel-title>
+      <mat-panel-description>
+        Modify which columns are shown in the table and exported
+      </mat-panel-description>
+    </mat-expansion-panel-header>
 
-    <mat-card-content>
-      <div class="column-selectors">
-        <div class="selector-group">
-          <mat-checkbox [(ngModel)]="columnVisibility.applicant" (change)="updateDisplayedColumns(); saveColumnVisibility()" color="primary">Applicant</mat-checkbox>
-          <mat-checkbox [(ngModel)]="columnVisibility.acronym" (change)="updateDisplayedColumns(); saveColumnVisibility()" color="primary">Acronym</mat-checkbox>
-          <mat-checkbox [(ngModel)]="columnVisibility.entityType" (change)="updateDisplayedColumns(); saveColumnVisibility()" color="primary">Entity Type</mat-checkbox>
-          <mat-checkbox [(ngModel)]="columnVisibility.submittedAt" (change)="updateDisplayedColumns(); saveColumnVisibility()" color="primary">Submitted At</mat-checkbox>
-          <mat-checkbox [(ngModel)]="columnVisibility.preScreening" (change)="updateDisplayedColumns(); saveColumnVisibility()" color="primary">Pre-Screening</mat-checkbox>
-          <mat-checkbox [(ngModel)]="columnVisibility.profiles" (change)="updateDisplayedColumns(); saveColumnVisibility()" color="primary">Profiles</mat-checkbox>
-        </div>
-        <div class="selector-group">
-          <mat-checkbox [(ngModel)]="columnVisibility.country" (change)="updateDisplayedColumns(); saveColumnVisibility()" color="primary">Country</mat-checkbox>
-          <mat-checkbox [(ngModel)]="columnVisibility.address" (change)="updateDisplayedColumns(); saveColumnVisibility()" color="primary">Address</mat-checkbox>
-          <mat-checkbox [(ngModel)]="columnVisibility.nolStatus" (change)="updateDisplayedColumns(); saveColumnVisibility()" color="primary">NOL Status</mat-checkbox>
-          <mat-checkbox [(ngModel)]="columnVisibility.hatyjaReviewComments" (change)="updateDisplayedColumns(); saveColumnVisibility()" color="primary">Hatyja Review</mat-checkbox>
-          <mat-checkbox [(ngModel)]="columnVisibility.redFlags" (change)="updateDisplayedColumns(); saveColumnVisibility()" color="primary">Red Flags</mat-checkbox>
-          <mat-checkbox [(ngModel)]="columnVisibility.passed" (change)="updateDisplayedColumns(); saveColumnVisibility()" color="primary">Passed</mat-checkbox>
-        </div>
-        <div class="selector-group">
-          <mat-checkbox [(ngModel)]="columnVisibility.djResult" (change)="updateDisplayedColumns(); saveColumnVisibility()" color="primary">DJ-Result</mat-checkbox>
-          <mat-checkbox [(ngModel)]="columnVisibility.djReportNumber" (change)="updateDisplayedColumns(); saveColumnVisibility()" color="primary">DJ report number</mat-checkbox>
-          <mat-checkbox [(ngModel)]="columnVisibility.djReportLink" (change)="updateDisplayedColumns(); saveColumnVisibility()" color="primary">DJ report link</mat-checkbox>
-          <mat-checkbox [(ngModel)]="columnVisibility.djTruePositive" (change)="updateDisplayedColumns(); saveColumnVisibility()" color="primary">DJ: True positive</mat-checkbox>
-          <mat-checkbox [(ngModel)]="columnVisibility.djFalsePositive" (change)="updateDisplayedColumns(); saveColumnVisibility()" color="primary">DJ: False positive</mat-checkbox>
-          <mat-checkbox [(ngModel)]="columnVisibility.escalationRequired" (change)="updateDisplayedColumns(); saveColumnVisibility()" color="primary">Escalation Required</mat-checkbox>
-          <mat-checkbox [(ngModel)]="columnVisibility.hatyjaComments" (change)="updateDisplayedColumns(); saveColumnVisibility()" color="primary">Hatyja comments</mat-checkbox>
-        </div>
+    <!-- Column Selection Multi-Select & Chips -->
+    <div class="selection-container">
+      <mat-form-field appearance="outline" class="column-select-field">
+        <mat-label>Visible Columns</mat-label>
+        <mat-select [(ngModel)]="selectedColumnKeys" multiple (selectionChange)="onColumnSelectionChange()">
+          <mat-select-trigger>
+            {{ selectedColumnKeys.length }} columns selected
+          </mat-select-trigger>
+          <mat-option *ngFor="let key of columnKeys" [value]="key">
+            {{ columnNames[key] }}
+          </mat-option>
+        </mat-select>
+      </mat-form-field>
+
+      <div class="chips-wrapper">
+        <mat-chip-grid #chipGrid aria-label="Selected columns">
+          <mat-chip-row *ngFor="let key of selectedColumnKeys"
+                        (removed)="removeColumn(key)"
+                        [class.chip-dj]="key.startsWith('dj')"
+                        [class.chip-hatyja]="key.startsWith('hatyja')">
+            {{ columnNames[key] }}
+            <button matChipRemove [attr.aria-label]="'remove ' + columnNames[key]">
+              <mat-icon>cancel</mat-icon>
+            </button>
+          </mat-chip-row>
+        </mat-chip-grid>
       </div>
+    </div>
+  </mat-expansion-panel>
 
-      <div class="action-row">
-        <button mat-stroked-button color="primary" class="export-selected-btn" (click)="exportToExcel(true)" style="margin-right: 12px;">
-          <mat-icon>file_download</mat-icon>
-          Export Selected Columns
-        </button>
-        <button mat-flat-button color="primary" class="copy-clipboard-btn" (click)="copyTableToClipboard(true)">
-          <mat-icon>content_copy</mat-icon>
-          Copy for Excel (Selected)
-        </button>
-      </div>
-    </mat-card-content>
-  </mat-card>
+  <!-- SEARCH & QUICK ACTIONS BAR -->
+  <div class="search-and-actions-row">
+    <div class="search-bar-wrapper">
+      <mat-icon class="search-icon">search</mat-icon>
+      <input
+        #searchInput
+        class="search-input"
+        type="text"
+        placeholder="Search across all columns…"
+        (input)="applyFilter($event)">
+      <button *ngIf="searchInput.value" mat-icon-button class="clear-search-btn" (click)="clearSearch(searchInput)">
+        <mat-icon>close</mat-icon>
+      </button>
+    </div>
 
-  <!-- SEARCH BAR -->
-  <div class="search-bar-wrapper">
-    <mat-icon class="search-icon">search</mat-icon>
-    <input
-      #searchInput
-      class="search-input"
-      type="text"
-      placeholder="Search across all columns…"
-      (input)="applyFilter($event)">
-    <button *ngIf="searchInput.value" mat-icon-button class="clear-search-btn" (click)="clearSearch(searchInput)">
-      <mat-icon>close</mat-icon>
-    </button>
+    <div class="quick-actions">
+      <button mat-stroked-button color="primary" class="quick-export-btn" (click)="exportToExcel(true)">
+        <mat-icon>file_download</mat-icon>
+        Export Selected
+      </button>
+      <button mat-flat-button color="primary" class="quick-copy-btn" (click)="copyTableToClipboard(true)">
+        <mat-icon>content_copy</mat-icon>
+        Copy (Selected)
+      </button>
+    </div>
   </div>
 
   <mat-card class="table-card">
     <div class="table-container">
       <table mat-table [dataSource]="dataSource" matSort class="mat-elevation-z8 premium-table">
+
+        <!-- Checkbox Column -->
+        <ng-container matColumnDef="select">
+          <th mat-header-cell *matHeaderCellDef class="select-column">
+            <mat-checkbox (change)="$event ? masterToggle() : null"
+                          [checked]="selection.hasValue() && isAllSelected()"
+                          [indeterminate]="selection.hasValue() && !isAllSelected()"
+                          color="primary">
+            </mat-checkbox>
+          </th>
+          <td mat-cell *matCellDef="let row" class="select-column">
+            <mat-checkbox (click)="$event.stopPropagation()"
+                          (change)="$event ? selection.toggle(row) : null"
+                          [checked]="selection.isSelected(row)"
+                          color="primary">
+            </mat-checkbox>
+          </td>
+        </ng-container>
 
         <!-- Applicant Column -->
         <ng-container matColumnDef="applicant">
@@ -365,11 +389,31 @@
           </td>
         </ng-container>
 
+
         <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-        <tr mat-row *matRowDef="let row; columns: displayedColumns;" class="row-hover"></tr>
+        <tr mat-row *matRowDef="let row; columns: displayedColumns;" class="row-hover" [class.selected-row]="selection.isSelected(row)"></tr>
       </table>
     </div>
     <mat-paginator [pageSizeOptions]="[10, 20, 50]" showFirstLastButtons aria-label="Select page of applicant records">
     </mat-paginator>
   </mat-card>
+</div>
+
+<!-- Floating Action Bar -->
+<div class="floating-selection-bar" [class.show-bar]="!selection.isEmpty()">
+  <div class="bar-content">
+    <div class="selection-info">
+      <mat-icon class="info-icon">check_circle</mat-icon>
+      <span class="selected-count">{{ selection.selected.length }} records selected</span>
+    </div>
+    <div class="bar-actions">
+      <button mat-button class="cancel-btn" (click)="selection.clear()">
+        Cancel
+      </button>
+      <button mat-flat-button color="warn" class="delete-selected-btn" (click)="deleteSelectedRows()">
+        <mat-icon>delete</mat-icon>
+        Delete Selected
+      </button>
+    </div>
+  </div>
 </div>

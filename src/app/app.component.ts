@@ -1,4 +1,5 @@
 import { Component, ViewChild, AfterViewInit, ElementRef, NgZone } from '@angular/core';
+import { SelectionModel } from '@angular/cdk/collections';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatTableModule, MatTableDataSource } from '@angular/material/table';
@@ -13,6 +14,9 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatNativeDateModule } from '@angular/material/core';
+import { MatSelectModule } from '@angular/material/select';
+import { MatChipsModule } from '@angular/material/chips';
+import { MatExpansionModule } from '@angular/material/expansion';
 import * as XLSX from 'xlsx';
 
 export interface ApplicantRecord {
@@ -68,7 +72,10 @@ const STORAGE_KEY = 'gfc_applicant_data';
     MatFormFieldModule,
     MatInputModule,
     MatDatepickerModule,
-    MatNativeDateModule
+    MatNativeDateModule,
+    MatSelectModule,
+    MatChipsModule,
+    MatExpansionModule
   ],
   templateUrl: './app.component.html',
   styleUrls: ['./app.component.css']
@@ -82,8 +89,11 @@ export class AppComponent implements AfterViewInit {
   @ViewChild(MatSort) sort!: MatSort;
 
   editingReviewElement: ApplicantRecord | null = null;
+  selection = new SelectionModel<ApplicantRecord>(true, []);
+  selectedColumnKeys: string[] = [];
 
-  constructor(private ngZone: NgZone) { 
+  constructor(private ngZone: NgZone) {
+    this.syncSelectedKeys();
     this.updateDisplayedColumns();
   }
 
@@ -96,6 +106,7 @@ export class AppComponent implements AfterViewInit {
       try {
         const parsed = JSON.parse(savedVisibility);
         this.columnVisibility = { ...this.columnVisibility, ...parsed };
+        this.syncSelectedKeys();
         this.updateDisplayedColumns();
       } catch { /* ignore */ }
     }
@@ -139,7 +150,7 @@ export class AppComponent implements AfterViewInit {
 
   toggleReviewEdit(element: ApplicantRecord, field: 'isEditingReview' | 'isEditingHatyjaComments', event: MouseEvent) {
     event.stopPropagation();
-    
+
     // First, clear any other editing states in all records to avoid multiple textareas
     this.dataSource.data.forEach(r => {
       r.isEditingReview = false;
@@ -147,7 +158,7 @@ export class AppComponent implements AfterViewInit {
     });
 
     this.editingReviewElement = element;
-    
+
     // Set the specific editing flag
     if (field === 'isEditingReview') element.isEditingReview = true;
     else if (field === 'isEditingHatyjaComments') element.isEditingHatyjaComments = true;
@@ -240,12 +251,34 @@ export class AppComponent implements AfterViewInit {
   };
 
   updateDisplayedColumns() {
-    this.displayedColumns = this.columnKeys.filter(key => (this.columnVisibility as any)[key]);
+    this.displayedColumns = ['select', ...this.columnKeys.filter(key => (this.columnVisibility as any)[key])];
+  }
+
+  syncSelectedKeys() {
+    this.selectedColumnKeys = this.columnKeys.filter(key => (this.columnVisibility as any)[key]);
+  }
+
+  onColumnSelectionChange() {
+    // Reset all to false first
+    Object.keys(this.columnVisibility).forEach(key => {
+      (this.columnVisibility as any)[key] = false;
+    });
+    // Set selected to true
+    this.selectedColumnKeys.forEach(key => {
+      (this.columnVisibility as any)[key] = true;
+    });
+    this.updateDisplayedColumns();
+    this.saveColumnVisibility();
+  }
+
+  removeColumn(key: string) {
+    this.selectedColumnKeys = this.selectedColumnKeys.filter(k => k !== key);
+    this.onColumnSelectionChange();
   }
 
   // Helper arrays for UI presentation
   columnKeys = [
-    'applicant', 'acronym', 'entityType', 
+    'applicant', 'acronym', 'entityType',
     'submittedAt', 'preScreening', 'profiles',
     'country', 'address', 'nolStatus', 'hatyjaReviewComments', 'redFlags', 'passed',
     'djResult', 'djReportNumber', 'djReportLink', 'djTruePositive', 'djFalsePositive', 'escalationRequired', 'hatyjaComments'
@@ -271,6 +304,33 @@ export class AppComponent implements AfterViewInit {
     escalationRequired: 'Escalation required to DRMC/Compliance?',
     hatyjaComments: 'Hatyja comments'
   };
+
+  // Selection helpers
+  isAllSelected() {
+    const numSelected = this.selection.selected.length;
+    const numRows = this.dataSource.data.length;
+    return numSelected === numRows;
+  }
+
+  masterToggle() {
+    this.isAllSelected() ?
+        this.selection.clear() :
+        this.dataSource.data.forEach(row => this.selection.select(row));
+  }
+
+  deleteSelectedRows() {
+    const selected = this.selection.selected;
+    if (selected.length === 0) return;
+    
+    const data = this.dataSource.data;
+    const newData = data.filter(row => !this.selection.isSelected(row));
+    this.dataSource.data = newData;
+    this.selection.clear();
+    this.saveToStorage();
+    this.showToast(`${selected.length} records deleted.`, 'info');
+  }
+
+  // Remove individual deleteRow as it's replaced by the selection model
 
   exportToExcel(selectedOnly: boolean): void {
     let dataToExport: any[] = [];
@@ -305,12 +365,12 @@ export class AppComponent implements AfterViewInit {
 
   copyTableToClipboard(selectedOnly: boolean): void {
     const data = this.dataSource.data;
-    const columns = this.columnKeys.filter(key => !selectedOnly || (this.columnVisibility as any)[key]);
-    
+    const columns = this.columnKeys.filter(key => (!selectedOnly || (this.columnVisibility as any)[key]));
+
     // Create headers row
     const headers = columns.map(key => this.columnNames[key]).join('\t');
-    
-    // Create data rows
+
+    // Create data rowshatyja comments and reviews in blue
     const rows = data.map(row => {
       return columns.map(key => {
         let val = (row as any)[key];
