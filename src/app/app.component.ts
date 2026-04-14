@@ -46,6 +46,20 @@ export interface ApplicantRecord {
   isEditingHatyjaComments?: boolean;
 }
 
+export interface DashboardStats {
+  total: number;
+  countries: number;
+  accepted: number;
+  rejected: number;
+  pending: number;
+  redFlags: number;
+  acceptedPct: number;
+  rejectedPct: number;
+  pendingPct: number;
+  redFlagsPct: number;
+  topCountriesRedFlags: { name: string; count: number }[];
+}
+
 const ELEMENT_DATA: ApplicantRecord[] = [
   { applicant: 'Acme Corp', acronym: 'AC', entityType: 'Corporation', submittedAt: new Date('2023-01-15'), preScreening: 'Pass', profiles: 'https://example.com/acme', country: 'USA', address: '123 Main St', nolStatus: 'Active', hatyjaReviewComments: 'Looks good', redFlags: 'None', passed: 'Accepted', djResult: 'Clean', djReportNumber: 'DJ-101', djReportLink: 'https://dj.com/101', djTruePositive: 'No', djFalsePositive: 'No', escalationRequired: 'No', hatyjaComments: 'Ready for full review' },
   { applicant: 'Global Tech', acronym: 'GT', entityType: 'LLC', submittedAt: new Date('2023-02-10'), preScreening: 'Pending', profiles: 'https://example.com/gt', country: 'UK', address: '', nolStatus: 'Pending', hatyjaReviewComments: 'Needs more info', redFlags: 'Incomplete documents', passed: '', djResult: 'Warning', djReportNumber: 'DJ-202', djReportLink: 'https://dj.com/202', djTruePositive: 'Maybe', djFalsePositive: 'No', escalationRequired: 'Yes', hatyjaComments: 'Contact client' },
@@ -92,6 +106,59 @@ export class AppComponent implements AfterViewInit {
   selection = new SelectionModel<ApplicantRecord>(true, []);
   selectedColumnKeys: string[] = [];
 
+  get stats(): DashboardStats {
+    const data = this.dataSource.data;
+    const total = data.length;
+    if (total === 0) {
+      return {
+        total: 0,
+        countries: 0,
+        accepted: 0,
+        rejected: 0,
+        pending: 0,
+        redFlags: 0,
+        acceptedPct: 0,
+        rejectedPct: 0,
+        pendingPct: 0,
+        redFlagsPct: 0,
+        topCountriesRedFlags: []
+      };
+    }
+
+    const countries = new Set(data.map(d => d.country).filter(c => !!c)).size;
+    const accepted = data.filter(d => d.passed === 'Accepted').length;
+    const rejected = data.filter(d => d.passed === 'Rejected').length;
+    const pending = total - accepted - rejected;
+    const redFlags = data.filter(d => d.redFlags && d.redFlags !== 'None').length;
+
+    return {
+      total,
+      countries,
+      accepted,
+      rejected,
+      pending,
+      redFlags,
+      acceptedPct: (accepted / total) * 100,
+      rejectedPct: (rejected / total) * 100,
+      pendingPct: (pending / total) * 100,
+      redFlagsPct: (redFlags / total) * 100,
+      topCountriesRedFlags: this.getTopCountriesRedFlags(data)
+    };
+  }
+
+  private getTopCountriesRedFlags(data: ApplicantRecord[]) {
+    const counts: Record<string, number> = {};
+    data.filter(d => d.redFlags && d.redFlags !== 'None' && d.country)
+      .forEach(d => {
+        counts[d.country] = (counts[d.country] || 0) + 1;
+      });
+
+    return Object.keys(counts)
+      .map(name => ({ name, count: counts[name] }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 3);
+  }
+
   constructor(private ngZone: NgZone) {
     this.syncSelectedKeys();
     this.updateDisplayedColumns();
@@ -116,6 +183,13 @@ export class AppComponent implements AfterViewInit {
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
+          // Convert date strings back to Date objects
+          parsed.forEach(record => {
+            if (record.submittedAt) {
+              const d = new Date(record.submittedAt);
+              if (!isNaN(d.getTime())) record.submittedAt = d;
+            }
+          });
           this.dataSource.data = parsed;
           this.showToast(`${parsed.length} records loaded.`, 'info');
         }
@@ -314,14 +388,14 @@ export class AppComponent implements AfterViewInit {
 
   masterToggle() {
     this.isAllSelected() ?
-        this.selection.clear() :
-        this.dataSource.data.forEach(row => this.selection.select(row));
+      this.selection.clear() :
+      this.dataSource.data.forEach(row => this.selection.select(row));
   }
 
   deleteSelectedRows() {
     const selected = this.selection.selected;
     if (selected.length === 0) return;
-    
+
     const data = this.dataSource.data;
     const newData = data.filter(row => !this.selection.isSelected(row));
     this.dataSource.data = newData;
@@ -402,7 +476,12 @@ export class AppComponent implements AfterViewInit {
     const reader: FileReader = new FileReader();
     reader.onload = (e: any) => {
       const dataBuffer = e.target.result;
-      const wb: XLSX.WorkBook = XLSX.read(dataBuffer, { type: 'array' });
+      const wb: XLSX.WorkBook = XLSX.read(dataBuffer, {
+        type: 'array',
+        cellDates: true,
+        cellText: false,
+        cellNF: true
+      });
 
       const wsname: string = wb.SheetNames[0];
       const ws: XLSX.WorkSheet = wb.Sheets[wsname];
@@ -415,7 +494,7 @@ export class AppComponent implements AfterViewInit {
       if (importedData.length > 0) {
         // En lugar de asumir que la fila 0 es la cabecera, buscamos cuál fila contiene las cabeceras reales
         let headerRowIndex = 0;
-        let idxApp = 0, idxAcronym = 1, idxType = 2, idxCountry = 3, idxAddress = -1, idxNol = 4, idxReview = 5, idxFlags = 6, idxPassed = -1;
+        let idxApp = -1, idxAcronym = -1, idxType = -1, idxCountry = -1, idxAddress = -1, idxNol = -1, idxReview = -1, idxFlags = -1, idxPassed = -1;
         let idxSubmitted = -1, idxPreScreen = -1, idxProfiles = -1;
         let idxDjResult = -1, idxDjNumber = -1, idxDjLink = -1, idxDjTrue = -1, idxDjFalse = -1, idxEscalation = -1, idxHatyjaExtra = -1;
         let foundHeaders = false;
@@ -432,28 +511,36 @@ export class AppComponent implements AfterViewInit {
           row.forEach((col: any, index: number) => {
             if (!col) return;
             const colName = String(col).toLowerCase().trim();
-            if (colName.includes('applicant')) { tempIdxApp = index; matches++; }
-            else if (colName.includes('acronym')) { tempIdxAcronym = index; matches++; }
-            else if (colName.includes('entity')) { tempIdxType = index; matches++; }
-            else if (colName.includes('country')) { tempIdxCountry = index; matches++; }
-            else if (colName.includes('address')) { tempIdxAddress = index; matches++; }
+            if (colName.includes('applicant') || colName.includes('name')) { tempIdxApp = index; matches++; }
+            else if (colName.includes('acronym') || colName.includes('short')) { tempIdxAcronym = index; matches++; }
+            else if (colName.includes('entity') || colName.includes('type')) { tempIdxType = index; matches++; }
+            else if (colName.includes('country') && !colName.includes('flag')) { tempIdxCountry = index; matches++; }
+            else if (colName.includes('address') || colName.includes('location')) { tempIdxAddress = index; matches++; }
             else if (colName.includes('nol')) { tempIdxNol = index; matches++; }
-            else if (colName.includes('review') || (colName.includes('hatyja') && !colName.includes('comments'))) { tempIdxReview = index; matches++; }
-            else if (colName.includes('flags') || colName.includes('red')) { tempIdxFlags = index; matches++; }
-            else if (colName.includes('passed')) { tempIdxPassed = index; matches++; }
-            else if (colName.includes('submit')) { tempIdxSub = index; matches++; }
-            else if (colName.includes('screening')) { tempIdxPre = index; matches++; }
-            else if (colName.includes('profiles')) { tempIdxProf = index; matches++; }
-            else if (colName.includes('dj-result')) { tempIdxDjRes = index; matches++; }
-            else if (colName.includes('report number')) { tempIdxDjNum = index; matches++; }
-            else if (colName.includes('report link')) { tempIdxDjLnk = index; matches++; }
+            else if (colName === 'review' || (colName.includes('hatyja') && colName.includes('review'))) { tempIdxReview = index; matches++; }
+            else if (colName.includes('red flag') || colName.includes('red-flag') || (colName.includes('flag') && !colName.includes('country'))) { tempIdxFlags = index; matches++; }
+            else if (colName.includes('passed') || colName.includes('status')) { tempIdxPassed = index; matches++; }
+            else if (colName.includes('submit') || colName.includes('subm') || colName.includes('date') || colName.includes('time') || colName.includes('create') || colName.includes('regist') || colName.includes('enviado') || colName.includes('fecha') || colName === 'at') { 
+              tempIdxSub = index; 
+              matches++; 
+            }
+            else if (colName.includes('screening') || colName.includes('pre-')) { tempIdxPre = index; matches++; }
+            else if (colName.includes('profiles') || colName.includes('url') || colName.includes('link')) { tempIdxProf = index; matches++; }
+            else if (colName.includes('dj-result') || colName.includes('dj result')) { tempIdxDjRes = index; matches++; }
+            else if (colName.includes('report number') || colName.includes('dj report no')) { tempIdxDjNum = index; matches++; }
+            else if (colName.includes('report link') || colName.includes('dj link')) { tempIdxDjLnk = index; matches++; }
             else if (colName.includes('true positive')) { tempIdxDjT = index; matches++; }
             else if (colName.includes('false positive')) { tempIdxDjF = index; matches++; }
             else if (colName.includes('escalation')) { tempIdxEsc = index; matches++; }
-            else if (colName === 'hatyja comments') { tempIdxHatX = index; matches++; }
+            else if (colName.includes('comments') && (colName.includes('hatyja') || colName.includes('extra') || colName.includes('review'))) { tempIdxHatX = index; matches++; }
           });
 
           if (matches >= 2) {
+            console.log('--- HEADER FOUND AT ROW', i, '---');
+            console.log('Indices:', { applicant: tempIdxApp, acronym: tempIdxAcronym, type: tempIdxType, country: tempIdxCountry, submitted: tempIdxSub });
+            
+            if (tempIdxSub === -1) console.warn('WARNING: Submitted column NOT found in this row headers.');
+            
             idxApp = tempIdxApp !== -1 ? tempIdxApp : idxApp;
             idxAcronym = tempIdxAcronym !== -1 ? tempIdxAcronym : idxAcronym;
             idxType = tempIdxType !== -1 ? tempIdxType : idxType;
@@ -475,6 +562,7 @@ export class AppComponent implements AfterViewInit {
             idxHatyjaExtra = tempIdxHatX;
             headerRowIndex = i;
             foundHeaders = true;
+            console.log('Detected headers at row', i, { idxApp, idxCountry, idxSubmitted, idxNol });
             break;
           }
         }
@@ -483,9 +571,14 @@ export class AppComponent implements AfterViewInit {
         for (let i = headerRowIndex + 1; i < importedData.length; i++) {
           const row = importedData[i];
           if (row && row.length > 0) { // skip empty rows
-            // check if the row implies actual data (not just empty strings)
             const hasData = row.some(cell => cell !== undefined && cell !== null && String(cell).trim() !== '');
             if (hasData) {
+              const rawDate = idxSubmitted !== -1 ? row[idxSubmitted] : undefined;
+              if (i === headerRowIndex + 1) {
+                console.log('Sample data row:', row);
+                console.log('Raw date value found:', rawDate, typeof rawDate);
+              }
+
               newRecords.push({
                 applicant: idxApp !== -1 && row[idxApp] !== undefined ? String(row[idxApp]) : '',
                 acronym: idxAcronym !== -1 && row[idxAcronym] !== undefined ? String(row[idxAcronym]) : '',
@@ -493,13 +586,18 @@ export class AppComponent implements AfterViewInit {
                 country: idxCountry !== -1 && row[idxCountry] !== undefined ? String(row[idxCountry]) : '',
                 address: idxAddress !== -1 && row[idxAddress] !== undefined ? String(row[idxAddress]) : '',
                 nolStatus: idxNol !== -1 && row[idxNol] !== undefined ? String(row[idxNol]) : '',
-                hatyjaReviewComments: idxReview !== -1 && row[idxReview] !== undefined ? String(row[idxReview]) : '',
-                redFlags: idxFlags !== -1 && row[idxFlags] !== undefined ? String(row[idxFlags]) : 'None',
+                hatyjaReviewComments: idxReview !== -1 && row[idxReview] !== undefined && String(row[idxReview]).trim() !== '' ? String(row[idxReview]) : '',
+                redFlags: idxFlags !== -1 && row[idxFlags] !== undefined && String(row[idxFlags]).trim() !== '' ? String(row[idxFlags]) : '',
                 passed: idxPassed !== -1 && row[idxPassed] !== undefined ? String(row[idxPassed]) : '',
                 // Middle columns
-                submittedAt: idxSubmitted !== -1 && row[idxSubmitted] !== undefined ? row[idxSubmitted] : undefined,
+                submittedAt: this.parseImportedDate(rawDate),
                 preScreening: idxPreScreen !== -1 && row[idxPreScreen] !== undefined ? String(row[idxPreScreen]) : '',
-                profiles: idxProfiles !== -1 && row[idxProfiles] !== undefined ? String(row[idxProfiles]) : '',
+                profiles: (() => {
+                  const val = idxProfiles !== -1 && row[idxProfiles] !== undefined ? String(row[idxProfiles]).trim() : '';
+                  return (val && !val.startsWith('http')) 
+                    ? `https://partners.greenclimate.fund/pre-accreditation/${val}/staff/preview` 
+                    : val;
+                })(),
                 // End columns
                 djResult: idxDjResult !== -1 && row[idxDjResult] !== undefined ? String(row[idxDjResult]) : '',
                 djReportNumber: idxDjNumber !== -1 && row[idxDjNumber] !== undefined ? String(row[idxDjNumber]) : '',
@@ -516,6 +614,7 @@ export class AppComponent implements AfterViewInit {
 
       this.dataSource.data = newRecords;
       localStorage.setItem(STORAGE_KEY, JSON.stringify(newRecords));
+      console.log('Final Imported Records Sample:', newRecords[0]);
       if (this.paginator) {
         this.paginator.firstPage();
       }
@@ -523,5 +622,55 @@ export class AppComponent implements AfterViewInit {
       event.target.value = null;
     };
     reader.readAsArrayBuffer(target.files[0]);
+  }
+
+  private parseImportedDate(val: any): Date | undefined {
+    if (!val) return undefined;
+    if (val instanceof Date) return isNaN(val.getTime()) ? undefined : val;
+
+    // Handle numbers (Excel serial date)
+    if (typeof val === 'number') {
+      // Excel uses 1900-01-01 as epoch. 25569 is the difference in days to Unix epoch.
+      const d = new Date(Math.round((val - 25569) * 86400 * 1000));
+      if (!isNaN(d.getTime())) return d;
+    }
+
+    // Handle strings
+    if (typeof val === 'string' && val.trim() !== '') {
+      // Try native JS parsing first (handles ISO and many common formats)
+      let d = new Date(val);
+      if (!isNaN(d.getTime())) {
+        // Double check: if it parsed as a year like 0023, it might be a format error
+        if (d.getFullYear() > 1900) return d;
+      }
+
+      // Try parsing common formats like DD/MM/YYYY or MM/DD/YYYY
+      const parts = val.split(/[\/\-\.]/);
+      if (parts.length === 3) {
+        const p0 = Number(parts[0]);
+        const p1 = Number(parts[1]);
+        const p2 = Number(parts[2]);
+
+        // YYYY/MM/DD
+        if (parts[0].length === 4) {
+          d = new Date(p0, p1 - 1, p2);
+        }
+        // Try MM/DD/YYYY (US, common in Excel) or DD/MM/YYYY
+        else {
+          // If middle value > 12, it must be the day: MM/DD/YYYY
+          if (p1 > 12) {
+            d = new Date(p2, p0 - 1, p1);
+          } else {
+            // Ambiguous case (4/10/2026), default to the one that gives a valid date
+            // or just try common DD/MM/YYYY first, then MM/DD/YYYY
+            d = new Date(p2, p1 - 1, p0); // DD/MM/YYYY
+            if (isNaN(d.getTime())) d = new Date(p2, p0 - 1, p1); // MM/DD/YYYY
+          }
+        }
+        if (!isNaN(d.getTime()) && d.getFullYear() > 1900) return d;
+      }
+    }
+
+    return undefined;
   }
 }
