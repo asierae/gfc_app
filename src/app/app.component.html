@@ -84,11 +84,39 @@
       <div class="stat-content" style="width: 100%;">
         <span class="stat-label">Status Distribution</span>
         <div class="pie-container">
-        <div class="pie-chart" 
-             [style.--accepted-pct]="stats.acceptedPct" 
-             [style.--rejected-pct]="stats.rejectedPct">
-        </div>
-        <div class="pie-legend">
+          <!-- SVG Pie Chart with Tooltips -->
+          <div class="pie-chart-wrapper">
+            <svg viewBox="0 0 100 100" class="pie-svg">
+              <!-- Accepted (Green) -->
+              <circle cx="50" cy="50" r="40" 
+                      class="pie-slice accepted"
+                      pathLength="100"
+                      [style.stroke-dasharray]="stats.acceptedPct + ' 100'"
+                      [matTooltip]="'Accepted: ' + stats.accepted + ' (' + stats.acceptedPct + '%)'"
+                      matTooltipPosition="above">
+              </circle>
+              <!-- Rejected (Red) - Offset by Accepted -->
+              <circle cx="50" cy="50" r="40" 
+                      class="pie-slice rejected"
+                      pathLength="100"
+                      [style.stroke-dasharray]="stats.rejectedPct + ' 100'"
+                      [style.stroke-dashoffset]="'-' + stats.acceptedPct"
+                      [matTooltip]="'Rejected: ' + stats.rejected + ' (' + stats.rejectedPct + '%)'"
+                      matTooltipPosition="above">
+              </circle>
+              <!-- Pending (Light Gray) - Offset by Accepted + Rejected -->
+              <circle cx="50" cy="50" r="40" 
+                      class="pie-slice pending"
+                      pathLength="100"
+                      [style.stroke-dasharray]="stats.pendingPct + ' 100'"
+                      [style.stroke-dashoffset]="'-' + (stats.acceptedPct + stats.rejectedPct)"
+                      [matTooltip]="'Pending: ' + stats.pending + ' (' + stats.pendingPct + '%)'"
+                      matTooltipPosition="above">
+              </circle>
+            </svg>
+          </div>
+
+          <div class="pie-legend">
           <div class="legend-item">
             <span class="dot accepted"></span>
             <span class="label">Accepted</span>
@@ -161,6 +189,61 @@
         placeholder="Search across all columns…"
         (input)="applyFilter($event)">
       <button *ngIf="searchInput.value" mat-icon-button class="clear-search-btn" (click)="clearSearch(searchInput)">
+        <mat-icon>close</mat-icon>
+      </button>
+    </div>
+
+    <div class="region-filter-wrapper">
+      <mat-icon class="region-icon">public</mat-icon>
+      <mat-select
+        class="region-pill-select"
+        [panelClass]="'region-select-panel'"
+        [panelWidth]="'290px'"
+        [(ngModel)]="filterRegion"
+        (selectionChange)="onRegionFilterChange()">
+        <mat-option *ngFor="let region of regionOptionsWithCount" [value]="region.value">
+          {{ region.label }}
+        </mat-option>
+      </mat-select>
+    </div>
+
+    <!-- Custom Date Range Pill (Perfectly Aligned) -->
+    <div class="date-range-pill">
+      <mat-icon class="date-icon">calendar_today</mat-icon>
+      
+      <div class="date-inputs-group">
+        <div class="pill-input-wrapper">
+          <input 
+            class="pill-date-input" 
+            placeholder="From" 
+            [matDatepicker]="startPicker" 
+            [(ngModel)]="filterStartDate"
+            (dateChange)="updateFilter()"
+            readonly>
+          <mat-datepicker #startPicker></mat-datepicker>
+          <button mat-icon-button (click)="startPicker.open()" class="mini-picker-btn">
+            <mat-icon>expand_more</mat-icon>
+          </button>
+        </div>
+
+        <span class="date-sep">−</span>
+
+        <div class="pill-input-wrapper">
+          <input 
+            class="pill-date-input" 
+            placeholder="To" 
+            [matDatepicker]="endPicker" 
+            [(ngModel)]="filterEndDate"
+            (dateChange)="updateFilter()"
+            readonly>
+          <mat-datepicker #endPicker></mat-datepicker>
+          <button mat-icon-button (click)="endPicker.open()" class="mini-picker-btn">
+            <mat-icon>expand_more</mat-icon>
+          </button>
+        </div>
+      </div>
+      
+      <button *ngIf="filterStartDate || filterEndDate" mat-icon-button class="clear-pill-btn" (click)="clearDateFilter()" title="Clear date filter">
         <mat-icon>close</mat-icon>
       </button>
     </div>

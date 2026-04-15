@@ -17,6 +17,7 @@ import { MatNativeDateModule } from '@angular/material/core';
 import { MatSelectModule } from '@angular/material/select';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatExpansionModule } from '@angular/material/expansion';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import * as XLSX from 'xlsx';
 
 export interface ApplicantRecord {
@@ -83,13 +84,15 @@ const STORAGE_KEY = 'gfc_applicant_data';
     MatToolbarModule,
     MatCardModule,
     MatPaginatorModule,
+    MatSortModule,
     MatFormFieldModule,
     MatInputModule,
     MatDatepickerModule,
     MatNativeDateModule,
     MatSelectModule,
     MatChipsModule,
-    MatExpansionModule
+    MatExpansionModule,
+    MatTooltipModule
   ],
   templateUrl: './app.component.html',
   styleUrls: ['./app.component.css']
@@ -98,12 +101,72 @@ export class AppComponent implements AfterViewInit {
   title = 'angular-excel-app';
   displayedColumns: string[] = [];
   dataSource = new MatTableDataSource<ApplicantRecord>(ELEMENT_DATA);
+  selection = new SelectionModel<ApplicantRecord>(true, []);
+  
+  // Filtering properties
+  filterText: string = '';
+  filterStartDate?: Date | null;
+  filterEndDate?: Date | null;
+  filterRegion: string = 'All';
+  readonly regionOptions: string[] = [
+    'All',
+    'DAFR',
+    'DAPAC',
+    'DECM',
+    'DLAC',
+    'INTERNATIONAL'
+  ];
+  regionOptionsWithCount: { value: string; label: string }[] = [];
+  private readonly regionCountryMap: Record<string, Set<string>> = {
+    DAPAC: new Set([
+      'afghanistan', 'bangladesh', 'bhutan', 'china', 'hong kong', 'india', 'japan', 'kazakhstan',
+      'kyrgyzstan', 'laos', 'macau', 'maldives', 'mongolia', 'nepal', 'north korea', 'pakistan',
+      'south korea', 'sri lanka', 'taiwan', 'tajikistan', 'turkmenistan', 'uzbekistan', 'vietnam',
+      'viet nam',
+      "lao people's democratic", "lao people's democratic republic", "lao people's democratic republic (the)", 'lao pdr',
+      'fiji', 'kiribati', 'marshall islands', 'micronesia', 'nauru', 'palau', 'papua new guinea',
+      'samoa', 'solomon islands', 'timor leste', 'timor-leste', 'tonga', 'tuvalu', 'vanuatu'
+      , 'brunei', 'cambodia', 'indonesia', 'malaysia', 'myanmar', 'philippines', 'singapore',
+      'thailand'
+    ]),
+    DAFR: new Set([
+      'algeria', 'benin', 'burkina faso', 'cabo verde', 'cape verde', 'cameroon',
+      'central african republic', 'chad', 'congo', 'democratic republic of the congo',
+      'egypt', 'equatorial guinea', 'gabon', 'gambia', 'ghana', 'guinea', 'guinea-bissau',
+      'ivory coast', 'cote d ivoire', "cote d'ivoire", 'liberia', 'libya', 'mali', 'mauritania',
+      'morocco', 'niger', 'nigeria', 'senegal', 'sierra leone', 'sudan', 'togo', 'tunisia',
+      'angola', 'botswana', 'burundi', 'comoros', 'djibouti', 'eritrea', 'eswatini', 'swaziland',
+      'ethiopia', 'kenya', 'lesotho', 'madagascar', 'malawi', 'mauritius', 'mozambique',
+      'namibia', 'rwanda', 'seychelles', 'somalia', 'south africa', 'south sudan', 'tanzania',
+      'uganda', 'zambia', 'zimbabwe'
+    ]),
+    DECM: new Set([
+      'albania', 'andorra', 'armenia', 'austria', 'azerbaijan', 'belarus', 'belgium',
+      'bosnia and herzegovina', 'bulgaria', 'croatia', 'cyprus', 'czech republic', 'czechia',
+      'denmark', 'estonia', 'finland', 'france', 'georgia', 'germany', 'greece', 'hungary',
+      'iceland', 'ireland', 'italy', 'kosovo', 'latvia', 'liechtenstein', 'lithuania',
+      'luxembourg', 'malta', 'moldova', 'monaco', 'montenegro', 'netherlands', 'netherlands (the)',
+      'north macedonia', 'norway', 'poland', 'portugal', 'romania', 'russia', 'san marino',
+      'serbia', 'slovakia', 'slovenia', 'spain', 'sweden', 'switzerland', 'uk', 'united kingdom',
+      'ukraine', 'vatican city',
+      'bahrain', 'iraq', 'israel', 'jordan', 'kuwait', 'lebanon', 'oman', 'palestine', 'qatar',
+      'saudi arabia', 'syria', 'turkey', 'united arab emirates', 'uae', 'yemen', 'iran'
+    ]),
+    DLAC: new Set([
+      'antigua and barbuda', 'bahamas', 'barbados', 'belize', 'dominica', 'grenada', 'guyana',
+      'haiti', 'jamaica', 'saint kitts and nevis', 'saint lucia', 'saint vincent and the grenadines',
+      'suriname', 'trinidad and tobago',
+      'argentina', 'bolivia', 'brazil', 'chile', 'colombia', 'costa rica', 'cuba',
+      'dominican republic', 'ecuador', 'el salvador', 'guatemala', 'honduras', 'mexico',
+      'nicaragua', 'panama', 'paraguay', 'peru', 'uruguay', 'venezuela'
+    ])
+  };
+  private readonly countryToRegionMap = new Map<string, string>();
 
   @ViewChild(MatPaginator) paginator!: MatPaginator;
   @ViewChild(MatSort) sort!: MatSort;
 
   editingReviewElement: ApplicantRecord | null = null;
-  selection = new SelectionModel<ApplicantRecord>(true, []);
   selectedColumnKeys: string[] = [];
 
   get stats(): DashboardStats {
@@ -138,10 +201,10 @@ export class AppComponent implements AfterViewInit {
       rejected,
       pending,
       redFlags,
-      acceptedPct: (accepted / total) * 100,
-      rejectedPct: (rejected / total) * 100,
-      pendingPct: (pending / total) * 100,
-      redFlagsPct: (redFlags / total) * 100,
+      acceptedPct: Number(((accepted / total) * 100).toFixed(3)),
+      rejectedPct: Number(((rejected / total) * 100).toFixed(3)),
+      pendingPct: Number(((pending / total) * 100).toFixed(3)),
+      redFlagsPct: Number(((redFlags / total) * 100).toFixed(3)),
       topCountriesRedFlags: this.getTopCountriesRedFlags(data)
     };
   }
@@ -160,13 +223,74 @@ export class AppComponent implements AfterViewInit {
   }
 
   constructor(private ngZone: NgZone) {
+    this.buildCountryToRegionMap();
     this.syncSelectedKeys();
     this.updateDisplayedColumns();
+    this.deferRegionCountRefresh();
   }
 
   ngAfterViewInit() {
     this.dataSource.paginator = this.paginator;
     this.dataSource.sort = this.sort;
+    
+    // Set up custom sorting logic for dates vs text
+    this.dataSource.sortingDataAccessor = (item: ApplicantRecord, property: string) => {
+      switch (property) {
+        case 'submittedAt':
+          return item.submittedAt ? new Date(item.submittedAt).getTime() : 0;
+        default:
+          const val = (item as any)[property];
+          return typeof val === 'string' ? val.toLowerCase() : val || '';
+      }
+    };
+    
+    // Set up custom filter predicate
+    this.dataSource.filterPredicate = (data: ApplicantRecord, filter: string) => {
+      const defaultTerms = { text: '', region: 'All', start: null, end: null };
+      const searchTerms: { text: string; region: string; start?: Date | null; end?: Date | null } =
+        (typeof filter === 'string' && filter.trim().startsWith('{'))
+          ? JSON.parse(filter)
+          : defaultTerms;
+      
+      // 1. Text Search (over specific columns)
+      const dataStr = (
+        (data.applicant || '') + 
+        (data.acronym || '') + 
+        (data.country || '') + 
+        (data.nolStatus || '')
+      ).toLowerCase();
+      
+      const matchesSearch = dataStr.includes((searchTerms.text || '').toLowerCase());
+
+      // 1.5. Region Filter (computed from country field)
+      const rowRegion = this.getRegionByCountry(data.country);
+      const matchesRegion = this.matchesRegionSelection(rowRegion, searchTerms.region);
+      
+      // 2. Date Range Filter
+      let matchesDate = true;
+      if (searchTerms.start || searchTerms.end) {
+        if (!data.submittedAt) {
+          matchesDate = false;
+        } else {
+          const subDate = new Date(data.submittedAt);
+          subDate.setHours(0,0,0,0);
+          
+          if (searchTerms.start) {
+            const start = new Date(searchTerms.start);
+            start.setHours(0,0,0,0);
+            if (subDate < start) matchesDate = false;
+          }
+          if (searchTerms.end) {
+            const end = new Date(searchTerms.end);
+            end.setHours(0,0,0,0);
+            if (subDate > end) matchesDate = false;
+          }
+        }
+      }
+      
+      return matchesSearch && matchesRegion && matchesDate;
+    };
+
     // Restore column visibility from localStorage
     const savedVisibility = localStorage.getItem('gfc_column_visibility');
     if (savedVisibility) {
@@ -191,6 +315,7 @@ export class AppComponent implements AfterViewInit {
             }
           });
           this.dataSource.data = parsed;
+          this.deferRegionCountRefresh();
           this.showToast(`${parsed.length} records loaded.`, 'info');
         }
       } catch { /* ignore corrupt data */ }
@@ -257,8 +382,19 @@ export class AppComponent implements AfterViewInit {
   }
 
   applyFilter(event: Event) {
-    const value = (event.target as HTMLInputElement).value.trim().toLowerCase();
-    this.dataSource.filter = value;
+    this.filterText = (event.target as HTMLInputElement).value.trim().toLowerCase();
+    this.updateFilter();
+  }
+
+  updateFilter() {
+    const filterValue = {
+      text: this.filterText,
+      region: this.filterRegion,
+      start: this.filterStartDate,
+      end: this.filterEndDate
+    };
+    this.dataSource.filter = JSON.stringify(filterValue);
+    
     if (this.dataSource.paginator) {
       this.dataSource.paginator.firstPage();
     }
@@ -266,10 +402,74 @@ export class AppComponent implements AfterViewInit {
 
   clearSearch(input: HTMLInputElement) {
     input.value = '';
-    this.dataSource.filter = '';
-    if (this.dataSource.paginator) {
-      this.dataSource.paginator.firstPage();
-    }
+    this.filterText = '';
+    this.updateFilter();
+  }
+
+  clearDateFilter() {
+    this.filterStartDate = null;
+    this.filterEndDate = null;
+    this.updateFilter();
+  }
+
+  onRegionFilterChange() {
+    this.updateFilter();
+  }
+
+  private getRegionByCountry(country?: string): string {
+    const normalized = this.normalizeCountryName(country);
+    if (!normalized) return 'INTERNATIONAL';
+    return this.countryToRegionMap.get(normalized) || 'INTERNATIONAL';
+  }
+
+  private matchesRegionSelection(rowRegion: string, selectedRegion?: string): boolean {
+    if (!selectedRegion || selectedRegion === 'All') return true;
+    if (rowRegion === selectedRegion) return true;
+    return false;
+  }
+
+  private normalizeCountryName(country?: string): string {
+    if (!country) return '';
+    return country
+      .toLowerCase()
+      .trim()
+      .replace(/\(the\)/g, '')
+      .replace(/[.,]/g, '')
+      .replace(/\s+/g, ' ');
+  }
+
+  private getRegionCounts(): Record<string, number> {
+    const rowRegions = this.dataSource.data.map(record => this.getRegionByCountry(record.country));
+    const counts: Record<string, number> = {};
+
+    this.regionOptions.forEach(regionOption => {
+      counts[regionOption] = rowRegions.filter(rowRegion =>
+        this.matchesRegionSelection(rowRegion, regionOption)
+      ).length;
+    });
+
+    return counts;
+  }
+
+  private buildCountryToRegionMap() {
+    this.countryToRegionMap.clear();
+    Object.entries(this.regionCountryMap).forEach(([region, countries]) => {
+      countries.forEach(country => {
+        this.countryToRegionMap.set(this.normalizeCountryName(country), region);
+      });
+    });
+  }
+
+  private refreshRegionOptionsWithCount() {
+    const counts = this.getRegionCounts();
+    this.regionOptionsWithCount = this.regionOptions.map(region => ({
+      value: region,
+      label: `${region} (${counts[region] ?? 0})`
+    }));
+  }
+
+  private deferRegionCountRefresh() {
+    setTimeout(() => this.refreshRegionOptionsWithCount(), 0);
   }
 
   // ── Toast Notifications ──────────────────────────────────────
@@ -290,6 +490,7 @@ export class AppComponent implements AfterViewInit {
   clearData() {
     localStorage.removeItem(STORAGE_KEY);
     this.dataSource.data = [];
+    this.deferRegionCountRefresh();
     this.showToast('All data cleared from browser storage.', 'info');
   }
 
@@ -399,6 +600,7 @@ export class AppComponent implements AfterViewInit {
     const data = this.dataSource.data;
     const newData = data.filter(row => !this.selection.isSelected(row));
     this.dataSource.data = newData;
+    this.deferRegionCountRefresh();
     this.selection.clear();
     this.saveToStorage();
     this.showToast(`${selected.length} records deleted.`, 'info');
@@ -613,6 +815,7 @@ export class AppComponent implements AfterViewInit {
       }
 
       this.dataSource.data = newRecords;
+      this.deferRegionCountRefresh();
       localStorage.setItem(STORAGE_KEY, JSON.stringify(newRecords));
       console.log('Final Imported Records Sample:', newRecords[0]);
       if (this.paginator) {

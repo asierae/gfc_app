@@ -151,20 +151,40 @@
   width: 100%;
 }
 
-.pie-chart {
-  width: 100px;
-  height: 100px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  --accepted-end: calc(var(--accepted-pct) * 1%);
-  --rejected-end: calc((var(--accepted-pct) + var(--rejected-pct)) * 1%);
-  background: conic-gradient(
-    #22c55e 0% var(--accepted-end),
-    #ef4444 var(--accepted-end) var(--rejected-end),
-    #e2e8f0 var(--rejected-end) 100%
-  );
-  box-shadow: 0 0 0 8px rgba(0,0,0,0.02);
+/* ── DASHBOARD PIE CHART (SVG) ─────────────────── */
+.pie-chart-wrapper {
+  width: 120px;
+  height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.3s ease;
+  margin: 10px 0;
 }
+
+.pie-svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg); /* Start at top */
+  border-radius: 50%;
+}
+
+.pie-slice {
+  fill: none;
+  stroke-width: 18; /* Optimal thickness for donut */
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  stroke-linecap: butt; /* Clean ends for percentages */
+}
+
+.pie-slice:hover {
+  stroke-width: 22;
+  filter: saturate(1.2) brightness(1.1);
+}
+
+.pie-slice.accepted { stroke: #22c55e; }
+.pie-slice.rejected { stroke: #ef4444; }
+.pie-slice.pending  { stroke: #e2e8f0; }
 
 .pie-legend {
   display: flex;
@@ -270,7 +290,7 @@ mat-chip-row {
 .search-and-actions-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 16px;
   margin-bottom: 24px;
   flex-wrap: wrap;
@@ -336,10 +356,166 @@ mat-chip-row {
   height: 18px;
 }
 
+.region-filter-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background: white;
+  border-radius: 12px;
+  height: 54px;
+  padding: 0 14px 0 16px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  width: 290px;
+  box-sizing: border-box;
+  transition: all 0.3s ease;
+}
+
+.region-filter-wrapper:focus-within {
+  border-color: #2a5298;
+  box-shadow: 0 0 0 3px rgba(42,82,152,0.15);
+}
+
+.region-icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #94a3b8;
+  font-size: 20px;
+  width: 20px;
+  height: 20px;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.region-pill-select {
+  width: 100%;
+}
+
+.region-pill-select ::ng-deep .mat-mdc-select-trigger {
+  height: 54px;
+  display: flex;
+  align-items: center;
+  font-size: 16px;
+  color: #1e293b;
+  padding-left: 28px;
+}
+
+.region-pill-select ::ng-deep .mat-mdc-select-value {
+  color: #1e293b;
+}
+
+.region-pill-select ::ng-deep .mat-mdc-select-arrow {
+  color: #64748b;
+}
+
+.region-select-panel {
+  width: 290px !important;
+  min-width: 290px !important;
+  max-width: 290px !important;
+}
+
+.region-select-panel .mat-mdc-option .mdc-list-item__primary-text {
+  white-space: normal;
+  line-height: 1.25;
+}
+
+/* ── DATE RANGE FILTER (Redesigned) ───────────────── */
+/* ── DATE RANGE PILL (Custom Implementation) ─────── */
+.date-range-pill {
+  display: flex;
+  align-items: center;
+  background: white;
+  border-radius: 12px;
+  padding: 0 12px 0 16px;
+  height: 54px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e2e8f0;
+  transition: all 0.3s ease;
+  width: 320px; /* Optimal width for range */
+  box-sizing: border-box;
+}
+
+.date-range-pill:focus-within {
+  border-color: #2a5298;
+  box-shadow: 0 0 0 3px rgba(42,82,152,0.15);
+}
+
+.date-icon {
+  margin-right: 12px;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+}
+
+.date-inputs-group {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  gap: 4px;
+}
+
+.pill-input-wrapper {
+  display: flex;
+  align-items: center;
+  position: relative;
+  flex: 1;
+}
+
+.pill-date-input {
+  width: 100%;
+  border: none;
+  background: transparent;
+  outline: none;
+  font-family: inherit;
+  font-size: 14px;
+  color: #1e293b;
+  cursor: pointer;
+  padding: 4px 0;
+}
+
+.date-sep {
+  color: #cbd5e1;
+  font-weight: bold;
+  margin: 0 4px;
+}
+
+.mini-picker-btn {
+  width: 24px !important;
+  height: 24px !important;
+  line-height: 24px !important;
+  color: #94a3b8;
+  padding: 0 !important;
+}
+
+.mini-picker-btn mat-icon {
+  font-size: 18px !important;
+  width: 18px !important;
+  height: 18px !important;
+}
+
+.clear-pill-btn {
+  color: #94a3b8;
+  margin-left: 8px;
+  width: 32px !important;
+  height: 32px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.clear-pill-btn mat-icon {
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+}
+
 .quick-actions {
   display: flex;
   gap: 12px;
   align-items: center;
+  margin-left: auto;
 }
 
 .quick-export-btn, .quick-copy-btn {
