@@ -1,4 +1,4 @@
-import { Component, ViewChild, AfterViewInit, ElementRef, NgZone } from '@angular/core';
+import { Component, ViewChild, AfterViewInit, NgZone } from '@angular/core';
 import { SelectionModel } from '@angular/cdk/collections';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -165,7 +165,6 @@ export class AppComponent implements AfterViewInit {
 
   @ViewChild(MatPaginator) paginator!: MatPaginator;
   @ViewChild(MatSort) sort!: MatSort;
-
   editingReviewElement: ApplicantRecord | null = null;
   selectedColumnKeys: string[] = [];
 
@@ -320,6 +319,7 @@ export class AppComponent implements AfterViewInit {
         }
       } catch { /* ignore corrupt data */ }
     }
+
   }
 
   // Column resizing: runs OUTSIDE Angular zone for performance
@@ -528,6 +528,7 @@ export class AppComponent implements AfterViewInit {
   updateDisplayedColumns() {
     this.displayedColumns = ['select', ...this.columnKeys.filter(key => (this.columnVisibility as any)[key])];
   }
+
 
   syncSelectedKeys() {
     this.selectedColumnKeys = this.columnKeys.filter(key => (this.columnVisibility as any)[key]);

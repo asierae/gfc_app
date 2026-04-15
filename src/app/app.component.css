@@ -573,7 +573,7 @@ th.mat-column-select {
 .mat-column-applicant {
   min-width: 250px !important;
   position: sticky;
-  left: 0;
+  left: 48px;
   z-index: 100;
   background: white !important;
   box-shadow: 2px 0 5px rgba(0,0,0,0.05);
@@ -582,6 +582,24 @@ th.mat-column-select {
 th.mat-column-applicant {
   background-color: #f1f5f9 !important;
   z-index: 101;
+}
+
+/* Sticky-end Hatyja Review column — always pinned to the right,
+   left bound prevents it from overlapping the left-pinned columns.
+   !important on position is needed because .review-cell sets position:relative
+   later in the stylesheet with the same specificity. */
+.mat-column-hatyjaReviewComments {
+  position: sticky !important;
+  right: 0;
+  left: 298px;               /* 48 (select) + 250 (applicant) */
+  z-index: 99;               /* below select (102) & applicant (100) */
+  background: white !important;
+  box-shadow: -2px 0 6px rgba(0, 0, 0, 0.08);
+}
+
+th.mat-column-hatyjaReviewComments {
+  z-index: 100;              /* below select-header (103) & applicant-header (101) */
+  background-color: #eff6ff !important;
 }
 
 /* Category Colored Headers */
@@ -648,6 +666,11 @@ th.mat-header-cell .mat-sort-header-container {
 .review-cell {
   overflow: visible !important;
   position: relative;
+}
+
+.review-cell.review-cell-editing {
+  z-index: 10020 !important;
+  overflow: visible !important;
 }
 
 .review-container {
@@ -766,6 +789,10 @@ th.mat-header-cell .mat-sort-header-container {
   outline: none;
   resize: vertical;
   animation: popIn 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.review-cell.review-cell-editing .premium-textarea {
+  z-index: 10030;
 }
 
 @keyframes popIn {

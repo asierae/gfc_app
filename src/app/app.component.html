@@ -261,7 +261,9 @@
   </div>
 
   <mat-card class="table-card">
-    <div class="table-container">
+    <div
+      #tableContainer
+      class="table-container">
       <table mat-table [dataSource]="dataSource" matSort class="mat-elevation-z8 premium-table">
 
         <!-- Checkbox Column -->
@@ -403,7 +405,8 @@
             Hatyja Review
             <div #resizerHat class="custom-resizer" (mousedown)="initResize($event, resizerHat)"></div>
           </th>
-          <td mat-cell *matCellDef="let element" [hidden]="!columnVisibility.hatyjaReviewComments" class="review-cell">
+          <td mat-cell *matCellDef="let element" [hidden]="!columnVisibility.hatyjaReviewComments" class="review-cell"
+              [class.review-cell-editing]="element === editingReviewElement && element.isEditingReview">
             <div class="review-container">
               <!-- View mode: standard input -->
               <input *ngIf="element !== editingReviewElement || !element.isEditingReview" 
@@ -532,7 +535,8 @@
             Hatyja comments
             <div #resizerHatC class="custom-resizer" (mousedown)="initResize($event, resizerHatC)"></div>
           </th>
-          <td mat-cell *matCellDef="let element" [hidden]="!columnVisibility.hatyjaComments" class="review-cell">
+          <td mat-cell *matCellDef="let element" [hidden]="!columnVisibility.hatyjaComments" class="review-cell"
+              [class.review-cell-editing]="element === editingReviewElement && element.isEditingHatyjaComments">
             <div class="review-container">
               <input *ngIf="element !== editingReviewElement || !element.isEditingHatyjaComments" 
                 type="text" 
