@@ -583,11 +583,9 @@ export class AppComponent implements AfterViewInit {
   }
 
   private deferFilterCountRefresh() {
-    setTimeout(() => {
-      this.refreshRegionOptionsWithCount();
-      this.refreshEntityTypeOptionsWithCount();
-      this.refreshStatusOptionsWithCount();
-    }, 0);
+    this.refreshRegionOptionsWithCount();
+    this.refreshEntityTypeOptionsWithCount();
+    this.refreshStatusOptionsWithCount();
   }
 
   // ── Toast Notifications ──────────────────────────────────────
@@ -599,7 +597,7 @@ export class AppComponent implements AfterViewInit {
   showToast(message: string, type: 'success' | 'error' | 'info') {
     clearTimeout(this.toastTimer);
     this.toast = { message, type, visible: true };
-    this.toastTimer = setTimeout(() => { this.toast.visible = false; }, 3000);
+    this.toastTimer = setTimeout(() => { this.toast.visible = false; }, 2500);
   }
 
   dismissToast() { this.toast.visible = false; }
