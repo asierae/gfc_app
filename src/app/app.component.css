@@ -421,6 +421,126 @@ mat-chip-row {
   line-height: 1.25;
 }
 
+/* ── ENTITY TYPE FILTER ──────────────────────────── */
+.entity-type-filter-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background: white;
+  border-radius: 12px;
+  height: 54px;
+  padding: 0 14px 0 16px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  width: 290px;
+  box-sizing: border-box;
+  transition: all 0.3s ease;
+}
+
+.entity-type-filter-wrapper:focus-within {
+  border-color: #2a5298;
+  box-shadow: 0 0 0 3px rgba(42,82,152,0.15);
+}
+
+.entity-type-icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #94a3b8;
+  font-size: 20px;
+  width: 20px;
+  height: 20px;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.entity-type-pill-select {
+  width: 100%;
+}
+
+.entity-type-pill-select ::ng-deep .mat-mdc-select-trigger {
+  height: 54px;
+  display: flex;
+  align-items: center;
+  font-size: 16px;
+  color: #1e293b;
+  padding-left: 28px;
+}
+
+.entity-type-pill-select ::ng-deep .mat-mdc-select-value {
+  color: #1e293b;
+}
+
+.entity-type-pill-select ::ng-deep .mat-mdc-select-arrow {
+  color: #64748b;
+}
+
+.entity-type-select-panel {
+  width: 290px !important;
+  min-width: 290px !important;
+  max-width: 290px !important;
+}
+
+.entity-type-select-panel .mat-mdc-option .mdc-list-item__primary-text {
+  white-space: normal;
+  line-height: 1.25;
+}
+
+/* ── ENTITY TYPE BAR CHART (Dashboard) ───────────── */
+.entity-bar-card .stat-icon-wrapper { background: #ede9fe; color: #7c3aed; }
+
+.entity-type-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  margin-top: 8px;
+}
+
+.entity-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.entity-bar-label {
+  width: 110px;
+  min-width: 110px;
+  font-size: 11px;
+  color: #475569;
+  font-weight: 500;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.entity-bar-track {
+  flex: 1;
+  height: 14px;
+  background: #f1f5f9;
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+.entity-bar-fill {
+  height: 100%;
+  border-radius: 7px;
+  min-width: 4px;
+  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.entity-bar-count {
+  width: 28px;
+  min-width: 28px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #1e293b;
+  text-align: right;
+}
+
 /* ── DATE RANGE FILTER (Redesigned) ───────────────── */
 /* ── DATE RANGE PILL (Custom Implementation) ─────── */
 .date-range-pill {

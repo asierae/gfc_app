@@ -51,15 +51,6 @@
       </div>
     </mat-card>
 
-    <mat-card class="stat-card risk-card">
-      <div class="stat-icon-wrapper">
-        <mat-icon>warning</mat-icon>
-      </div>
-      <div class="stat-content">
-        <span class="stat-label">Risk Profile</span>
-        <span class="stat-value">{{ stats.redFlagsPct | number:'1.0-1' }}% <small>red flags</small></span>
-      </div>
-    </mat-card>
 
     <mat-card class="stat-card insights-card" *ngIf="stats.topCountriesRedFlags.length > 0">
       <div class="stat-icon-wrapper">
@@ -136,6 +127,26 @@
       </div>
     </div>
   </mat-card>
+
+    <mat-card class="stat-card entity-bar-card" *ngIf="stats.entityTypeCounts.length > 0">
+      <div class="stat-icon-wrapper">
+        <mat-icon>category</mat-icon>
+      </div>
+      <div class="stat-content" style="width: 100%;">
+        <span class="stat-label">Entity Type Distribution</span>
+        <div class="entity-type-bars">
+          <div class="entity-bar-row" *ngFor="let et of stats.entityTypeCounts">
+            <span class="entity-bar-label">{{ et.name }}</span>
+            <div class="entity-bar-track">
+              <div class="entity-bar-fill"
+                   [style.width.%]="et.pct"
+                   [style.background]="entityTypeColorMap[et.name] || '#94a3b8'"></div>
+            </div>
+            <span class="entity-bar-count">{{ et.count }}</span>
+          </div>
+        </div>
+      </div>
+    </mat-card>
 </div>
   <mat-expansion-panel class="selection-panel">
     <mat-expansion-panel-header>
@@ -207,6 +218,20 @@
       </mat-select>
     </div>
 
+    <div class="entity-type-filter-wrapper">
+      <mat-icon class="entity-type-icon">category</mat-icon>
+      <mat-select
+        class="entity-type-pill-select"
+        [panelClass]="'entity-type-select-panel'"
+        [panelWidth]="'290px'"
+        [(ngModel)]="filterEntityType"
+        (selectionChange)="onEntityTypeFilterChange()">
+        <mat-option *ngFor="let opt of entityTypeOptionsWithCount" [value]="opt.value">
+          {{ opt.label }}
+        </mat-option>
+      </mat-select>
+    </div>
+
     <!-- Custom Date Range Pill (Perfectly Aligned) -->
     <div class="date-range-pill">
       <mat-icon class="date-icon">calendar_today</mat-icon>
@@ -219,7 +244,9 @@
             [matDatepicker]="startPicker" 
             [(ngModel)]="filterStartDate"
             (dateChange)="updateFilter()"
-            readonly>
+            (click)="startPicker.open()"
+            readonly
+            style="cursor: pointer;">
           <mat-datepicker #startPicker></mat-datepicker>
           <button mat-icon-button (click)="startPicker.open()" class="mini-picker-btn">
             <mat-icon>expand_more</mat-icon>
@@ -235,7 +262,9 @@
             [matDatepicker]="endPicker" 
             [(ngModel)]="filterEndDate"
             (dateChange)="updateFilter()"
-            readonly>
+            (click)="endPicker.open()"
+            readonly
+            style="cursor: pointer;">
           <mat-datepicker #endPicker></mat-datepicker>
           <button mat-icon-button (click)="endPicker.open()" class="mini-picker-btn">
             <mat-icon>expand_more</mat-icon>

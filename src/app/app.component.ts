@@ -59,6 +59,7 @@ export interface DashboardStats {
   pendingPct: number;
   redFlagsPct: number;
   topCountriesRedFlags: { name: string; count: number }[];
+  entityTypeCounts: { name: string; count: number; pct: number }[];
 }
 
 const ELEMENT_DATA: ApplicantRecord[] = [
@@ -108,6 +109,17 @@ export class AppComponent implements AfterViewInit {
   filterStartDate?: Date | null;
   filterEndDate?: Date | null;
   filterRegion: string = 'All';
+  filterEntityType: string = 'All';
+  readonly entityTypeOptions: string[] = [
+    'All',
+    'UN System Entity',
+    'Public/Government-Controlled',
+    'Public/Government',
+    'Private Sector',
+    'Multilateral Organization',
+    'Unknown'
+  ];
+  entityTypeOptionsWithCount: { value: string; label: string }[] = [];
   readonly regionOptions: string[] = [
     'All',
     'DAFR',
@@ -183,7 +195,8 @@ export class AppComponent implements AfterViewInit {
         rejectedPct: 0,
         pendingPct: 0,
         redFlagsPct: 0,
-        topCountriesRedFlags: []
+        topCountriesRedFlags: [],
+        entityTypeCounts: []
       };
     }
 
@@ -204,9 +217,19 @@ export class AppComponent implements AfterViewInit {
       rejectedPct: Number(((rejected / total) * 100).toFixed(3)),
       pendingPct: Number(((pending / total) * 100).toFixed(3)),
       redFlagsPct: Number(((redFlags / total) * 100).toFixed(3)),
-      topCountriesRedFlags: this.getTopCountriesRedFlags(data)
+      topCountriesRedFlags: this.getTopCountriesRedFlags(data),
+      entityTypeCounts: this.getEntityTypeCounts(data, total)
     };
   }
+
+  readonly entityTypeColorMap: Record<string, string> = {
+    'UN System Entity': '#3b82f6',
+    'Public/Government-Controlled': '#8b5cf6',
+    'Public/Government': '#06b6d4',
+    'Private Sector': '#f59e0b',
+    'Multilateral Organization': '#10b981',
+    'Unknown': '#94a3b8'
+  };
 
   private getTopCountriesRedFlags(data: ApplicantRecord[]) {
     const counts: Record<string, number> = {};
@@ -225,7 +248,7 @@ export class AppComponent implements AfterViewInit {
     this.buildCountryToRegionMap();
     this.syncSelectedKeys();
     this.updateDisplayedColumns();
-    this.deferRegionCountRefresh();
+    this.deferFilterCountRefresh();
   }
 
   ngAfterViewInit() {
@@ -245,8 +268,8 @@ export class AppComponent implements AfterViewInit {
     
     // Set up custom filter predicate
     this.dataSource.filterPredicate = (data: ApplicantRecord, filter: string) => {
-      const defaultTerms = { text: '', region: 'All', start: null, end: null };
-      const searchTerms: { text: string; region: string; start?: Date | null; end?: Date | null } =
+      const defaultTerms = { text: '', region: 'All', entityType: 'All', start: null, end: null };
+      const searchTerms: { text: string; region: string; entityType: string; start?: Date | null; end?: Date | null } =
         (typeof filter === 'string' && filter.trim().startsWith('{'))
           ? JSON.parse(filter)
           : defaultTerms;
@@ -287,7 +310,10 @@ export class AppComponent implements AfterViewInit {
         }
       }
       
-      return matchesSearch && matchesRegion && matchesDate;
+      // 3. Entity Type Filter
+      const matchesEntityType = this.matchesEntityTypeSelection(data.entityType, searchTerms.entityType);
+
+      return matchesSearch && matchesRegion && matchesDate && matchesEntityType;
     };
 
     // Restore column visibility from localStorage
@@ -314,7 +340,7 @@ export class AppComponent implements AfterViewInit {
             }
           });
           this.dataSource.data = parsed;
-          this.deferRegionCountRefresh();
+          this.deferFilterCountRefresh();
           this.showToast(`${parsed.length} records loaded.`, 'info');
         }
       } catch { /* ignore corrupt data */ }
@@ -390,6 +416,7 @@ export class AppComponent implements AfterViewInit {
     const filterValue = {
       text: this.filterText,
       region: this.filterRegion,
+      entityType: this.filterEntityType,
       start: this.filterStartDate,
       end: this.filterEndDate
     };
@@ -413,6 +440,10 @@ export class AppComponent implements AfterViewInit {
   }
 
   onRegionFilterChange() {
+    this.updateFilter();
+  }
+
+  onEntityTypeFilterChange() {
     this.updateFilter();
   }
 
@@ -468,8 +499,62 @@ export class AppComponent implements AfterViewInit {
     }));
   }
 
-  private deferRegionCountRefresh() {
-    setTimeout(() => this.refreshRegionOptionsWithCount(), 0);
+  private normalizeEntityType(entityType?: string): string {
+    if (!entityType) return 'Unknown';
+    const val = entityType.toLowerCase().trim();
+    if (val.includes('un') && val.includes('system')) return 'UN System Entity';
+    if (val.includes('un-system')) return 'UN System Entity';
+    if (val.includes('government-controlled') || val.includes('government controlled')) return 'Public/Government-Controlled';
+    if (val.includes('public') && val.includes('government') && val.includes('controlled')) return 'Public/Government-Controlled';
+    if (val.includes('public') && val.includes('government')) return 'Public/Government';
+    if (val === 'public/government' || val === 'public-government') return 'Public/Government';
+    if (val.includes('private') || val.includes('sector')) return 'Private Sector';
+    if (val.includes('multilateral') || val.includes('organization')) return 'Multilateral Organization';
+    if (val.includes('non-profit') || val.includes('nonprofit')) return 'Multilateral Organization';
+    if (val.includes('corporation') || val.includes('llc') || val.includes('partnership')) return 'Private Sector';
+    return 'Unknown';
+  }
+
+  private matchesEntityTypeSelection(entityType?: string, selectedType?: string): boolean {
+    if (!selectedType || selectedType === 'All') return true;
+    return this.normalizeEntityType(entityType) === selectedType;
+  }
+
+  private getEntityTypeCounts(data: ApplicantRecord[], total: number): { name: string; count: number; pct: number }[] {
+    const counts: Record<string, number> = {};
+    data.forEach(d => {
+      const normalized = this.normalizeEntityType(d.entityType);
+      counts[normalized] = (counts[normalized] || 0) + 1;
+    });
+    return Object.keys(counts)
+      .map(name => ({ name, count: counts[name], pct: total > 0 ? Number(((counts[name] / total) * 100).toFixed(1)) : 0 }))
+      .sort((a, b) => b.count - a.count);
+  }
+
+  private getEntityTypeCounts2(): Record<string, number> {
+    const counts: Record<string, number> = {};
+    this.entityTypeOptions.forEach(opt => { counts[opt] = 0; });
+    this.dataSource.data.forEach(record => {
+      const normalized = this.normalizeEntityType(record.entityType);
+      counts[normalized] = (counts[normalized] || 0) + 1;
+      counts['All'] = (counts['All'] || 0) + 1;
+    });
+    return counts;
+  }
+
+  private refreshEntityTypeOptionsWithCount() {
+    const counts = this.getEntityTypeCounts2();
+    this.entityTypeOptionsWithCount = this.entityTypeOptions.map(opt => ({
+      value: opt,
+      label: `${opt} (${counts[opt] ?? 0})`
+    }));
+  }
+
+  private deferFilterCountRefresh() {
+    setTimeout(() => {
+      this.refreshRegionOptionsWithCount();
+      this.refreshEntityTypeOptionsWithCount();
+    }, 0);
   }
 
   // ── Toast Notifications ──────────────────────────────────────
@@ -490,7 +575,7 @@ export class AppComponent implements AfterViewInit {
   clearData() {
     localStorage.removeItem(STORAGE_KEY);
     this.dataSource.data = [];
-    this.deferRegionCountRefresh();
+    this.deferFilterCountRefresh();
     this.showToast('All data cleared from browser storage.', 'info');
   }
 
@@ -601,7 +686,7 @@ export class AppComponent implements AfterViewInit {
     const data = this.dataSource.data;
     const newData = data.filter(row => !this.selection.isSelected(row));
     this.dataSource.data = newData;
-    this.deferRegionCountRefresh();
+    this.deferFilterCountRefresh();
     this.selection.clear();
     this.saveToStorage();
     this.showToast(`${selected.length} records deleted.`, 'info');
@@ -816,7 +901,7 @@ export class AppComponent implements AfterViewInit {
       }
 
       this.dataSource.data = newRecords;
-      this.deferRegionCountRefresh();
+      this.deferFilterCountRefresh();
       localStorage.setItem(STORAGE_KEY, JSON.stringify(newRecords));
       console.log('Final Imported Records Sample:', newRecords[0]);
       if (this.paginator) {
