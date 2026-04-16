@@ -10,3 +10,19 @@ body {
   background-color: #f5f7fa; 
   color: #333;
 }
+
+/* Force mat-select text visible in filter pills */
+.region-filter-wrapper mat-select,
+.entity-type-filter-wrapper mat-select,
+.status-filter-wrapper mat-select,
+.region-filter-wrapper mat-select *,
+.entity-type-filter-wrapper mat-select *,
+.status-filter-wrapper mat-select * {
+  color: #1e293b !important;
+}
+
+.region-filter-wrapper mat-select .mat-mdc-select-arrow,
+.entity-type-filter-wrapper mat-select .mat-mdc-select-arrow,
+.status-filter-wrapper mat-select .mat-mdc-select-arrow {
+  color: #94a3b8 !important;
+}

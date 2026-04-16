@@ -110,6 +110,9 @@ export class AppComponent implements AfterViewInit {
   filterEndDate?: Date | null;
   filterRegion: string = 'All';
   filterEntityType: string = 'All';
+  filterStatus: string = 'All';
+  readonly statusOptions: string[] = ['All', 'Accepted', 'Rejected', 'Pending'];
+  statusOptionsWithCount: { value: string; label: string }[] = [];
   readonly entityTypeOptions: string[] = [
     'All',
     'UN System Entity',
@@ -268,8 +271,8 @@ export class AppComponent implements AfterViewInit {
     
     // Set up custom filter predicate
     this.dataSource.filterPredicate = (data: ApplicantRecord, filter: string) => {
-      const defaultTerms = { text: '', region: 'All', entityType: 'All', start: null, end: null };
-      const searchTerms: { text: string; region: string; entityType: string; start?: Date | null; end?: Date | null } =
+      const defaultTerms = { text: '', region: 'All', entityType: 'All', status: 'All', start: null, end: null };
+      const searchTerms: { text: string; region: string; entityType: string; status: string; start?: Date | null; end?: Date | null } =
         (typeof filter === 'string' && filter.trim().startsWith('{'))
           ? JSON.parse(filter)
           : defaultTerms;
@@ -313,7 +316,17 @@ export class AppComponent implements AfterViewInit {
       // 3. Entity Type Filter
       const matchesEntityType = this.matchesEntityTypeSelection(data.entityType, searchTerms.entityType);
 
-      return matchesSearch && matchesRegion && matchesDate && matchesEntityType;
+      // 4. Status Filter (Passed column)
+      let matchesStatus = true;
+      if (searchTerms.status && searchTerms.status !== 'All') {
+        if (searchTerms.status === 'Pending') {
+          matchesStatus = !data.passed || (data.passed !== 'Accepted' && data.passed !== 'Rejected');
+        } else {
+          matchesStatus = data.passed === searchTerms.status;
+        }
+      }
+
+      return matchesSearch && matchesRegion && matchesDate && matchesEntityType && matchesStatus;
     };
 
     // Restore column visibility from localStorage
@@ -417,6 +430,7 @@ export class AppComponent implements AfterViewInit {
       text: this.filterText,
       region: this.filterRegion,
       entityType: this.filterEntityType,
+      status: this.filterStatus,
       start: this.filterStartDate,
       end: this.filterEndDate
     };
@@ -444,6 +458,10 @@ export class AppComponent implements AfterViewInit {
   }
 
   onEntityTypeFilterChange() {
+    this.updateFilter();
+  }
+
+  onStatusFilterChange() {
     this.updateFilter();
   }
 
@@ -550,10 +568,25 @@ export class AppComponent implements AfterViewInit {
     }));
   }
 
+  private refreshStatusOptionsWithCount() {
+    const data = this.dataSource.data;
+    const counts: Record<string, number> = { All: data.length };
+    data.forEach(d => {
+      if (d.passed === 'Accepted') counts['Accepted'] = (counts['Accepted'] || 0) + 1;
+      else if (d.passed === 'Rejected') counts['Rejected'] = (counts['Rejected'] || 0) + 1;
+      else counts['Pending'] = (counts['Pending'] || 0) + 1;
+    });
+    this.statusOptionsWithCount = this.statusOptions.map(opt => ({
+      value: opt,
+      label: `${opt} (${counts[opt] ?? 0})`
+    }));
+  }
+
   private deferFilterCountRefresh() {
     setTimeout(() => {
       this.refreshRegionOptionsWithCount();
       this.refreshEntityTypeOptionsWithCount();
+      this.refreshStatusOptionsWithCount();
     }, 0);
   }
 

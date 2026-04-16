@@ -51,16 +51,15 @@
       </div>
     </mat-card>
 
-
     <mat-card class="stat-card insights-card" *ngIf="stats.topCountriesRedFlags.length > 0">
       <div class="stat-icon-wrapper">
         <mat-icon>analytics</mat-icon>
       </div>
-      <div class="stat-content">
-        <span class="stat-label">Top Most Risky Countries</span>
+      <div class="stat-content" style="width:100%">
+        <span class="stat-label">Top Risky Countries</span>
         <div class="top-countries-list">
           <div class="country-item" *ngFor="let c of stats.topCountriesRedFlags; let i = index">
-            <span class="rank">{{ i + 1 }}</span>
+            <span class="rank">#{{ i + 1 }}</span>
             <span class="name">{{ c.name }}</span>
             <span class="count">{{ c.count }}</span>
           </div>
@@ -72,67 +71,38 @@
       <div class="stat-icon-wrapper">
         <mat-icon>pie_chart</mat-icon>
       </div>
-      <div class="stat-content" style="width: 100%;">
+      <div class="stat-content" style="width:100%">
         <span class="stat-label">Status Distribution</span>
         <div class="pie-container">
-          <!-- SVG Pie Chart with Tooltips -->
           <div class="pie-chart-wrapper">
             <svg viewBox="0 0 100 100" class="pie-svg">
-              <!-- Accepted (Green) -->
-              <circle cx="50" cy="50" r="40" 
-                      class="pie-slice accepted"
-                      pathLength="100"
+              <circle cx="50" cy="50" r="40" class="pie-slice accepted" pathLength="100"
                       [style.stroke-dasharray]="stats.acceptedPct + ' 100'"
-                      [matTooltip]="'Accepted: ' + stats.accepted + ' (' + stats.acceptedPct + '%)'"
-                      matTooltipPosition="above">
-              </circle>
-              <!-- Rejected (Red) - Offset by Accepted -->
-              <circle cx="50" cy="50" r="40" 
-                      class="pie-slice rejected"
-                      pathLength="100"
+                      [matTooltip]="'Accepted: ' + stats.accepted + ' (' + stats.acceptedPct + '%)'" matTooltipPosition="above"></circle>
+              <circle cx="50" cy="50" r="40" class="pie-slice rejected" pathLength="100"
                       [style.stroke-dasharray]="stats.rejectedPct + ' 100'"
                       [style.stroke-dashoffset]="'-' + stats.acceptedPct"
-                      [matTooltip]="'Rejected: ' + stats.rejected + ' (' + stats.rejectedPct + '%)'"
-                      matTooltipPosition="above">
-              </circle>
-              <!-- Pending (Light Gray) - Offset by Accepted + Rejected -->
-              <circle cx="50" cy="50" r="40" 
-                      class="pie-slice pending"
-                      pathLength="100"
+                      [matTooltip]="'Rejected: ' + stats.rejected + ' (' + stats.rejectedPct + '%)'" matTooltipPosition="above"></circle>
+              <circle cx="50" cy="50" r="40" class="pie-slice pending" pathLength="100"
                       [style.stroke-dasharray]="stats.pendingPct + ' 100'"
                       [style.stroke-dashoffset]="'-' + (stats.acceptedPct + stats.rejectedPct)"
-                      [matTooltip]="'Pending: ' + stats.pending + ' (' + stats.pendingPct + '%)'"
-                      matTooltipPosition="above">
-              </circle>
+                      [matTooltip]="'Pending: ' + stats.pending + ' (' + stats.pendingPct + '%)'" matTooltipPosition="above"></circle>
             </svg>
           </div>
-
           <div class="pie-legend">
-          <div class="legend-item">
-            <span class="dot accepted"></span>
-            <span class="label">Accepted</span>
-            <span class="count">{{ stats.accepted }}</span>
-          </div>
-          <div class="legend-item">
-            <span class="dot rejected"></span>
-            <span class="label">Rejected</span>
-            <span class="count">{{ stats.rejected }}</span>
-          </div>
-          <div class="legend-item">
-            <span class="dot pending"></span>
-            <span class="label">Pending</span>
-            <span class="count">{{ stats.pending }}</span>
+            <div class="legend-item"><span class="dot accepted"></span><span class="label">Accepted</span><span class="count">{{ stats.accepted }}</span></div>
+            <div class="legend-item"><span class="dot rejected"></span><span class="label">Rejected</span><span class="count">{{ stats.rejected }}</span></div>
+            <div class="legend-item"><span class="dot pending"></span><span class="label">Pending</span><span class="count">{{ stats.pending }}</span></div>
           </div>
         </div>
       </div>
-    </div>
-  </mat-card>
+    </mat-card>
 
     <mat-card class="stat-card entity-bar-card" *ngIf="stats.entityTypeCounts.length > 0">
       <div class="stat-icon-wrapper">
         <mat-icon>category</mat-icon>
       </div>
-      <div class="stat-content" style="width: 100%;">
+      <div class="stat-content" style="width:100%">
         <span class="stat-label">Entity Type Distribution</span>
         <div class="entity-type-bars">
           <div class="entity-bar-row" *ngFor="let et of stats.entityTypeCounts">
@@ -147,7 +117,7 @@
         </div>
       </div>
     </mat-card>
-</div>
+  </div>
   <mat-expansion-panel class="selection-panel">
     <mat-expansion-panel-header>
       <mat-panel-title>
@@ -275,6 +245,20 @@
       <button *ngIf="filterStartDate || filterEndDate" mat-icon-button class="clear-pill-btn" (click)="clearDateFilter()" title="Clear date filter">
         <mat-icon>close</mat-icon>
       </button>
+    </div>
+
+    <div class="status-filter-wrapper">
+      <mat-icon class="status-icon">verified</mat-icon>
+      <mat-select
+        class="status-pill-select"
+        [panelClass]="'status-select-panel'"
+        [panelWidth]="'220px'"
+        [(ngModel)]="filterStatus"
+        (selectionChange)="onStatusFilterChange()">
+        <mat-option *ngFor="let opt of statusOptionsWithCount" [value]="opt.value">
+          {{ opt.label }}
+        </mat-option>
+      </mat-select>
     </div>
 
     <div class="quick-actions">
@@ -597,17 +581,18 @@
 <!-- Floating Action Bar -->
 <div class="floating-selection-bar" [class.show-bar]="!selection.isEmpty()">
   <div class="bar-content">
-    <div class="selection-info">
-      <mat-icon class="info-icon">check_circle</mat-icon>
-      <span class="selected-count">{{ selection.selected.length }} records selected</span>
+    <div class="bar-left">
+      <span class="bar-badge">{{ selection.selected.length }}</span>
+      <span class="bar-label">selected</span>
     </div>
+    <div class="bar-divider"></div>
     <div class="bar-actions">
-      <button mat-button class="cancel-btn" (click)="selection.clear()">
-        Cancel
+      <button class="bar-btn bar-btn-clear" (click)="selection.clear()" matTooltip="Clear selection">
+        <mat-icon>close</mat-icon>
       </button>
-      <button mat-flat-button color="warn" class="delete-selected-btn" (click)="deleteSelectedRows()">
-        <mat-icon>delete</mat-icon>
-        Delete Selected
+      <button class="bar-btn bar-btn-delete" (click)="deleteSelectedRows()" matTooltip="Delete selected">
+        <mat-icon>delete_outline</mat-icon>
+        <span>Delete</span>
       </button>
     </div>
   </div>
