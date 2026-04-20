@@ -1070,8 +1070,8 @@ th.mat-header-cell .mat-sort-header-container {
 
 .premium-textarea {
   position: fixed;
-  top: 0;
-  left: 0;
+  top: -9999px;
+  left: -9999px;
   width: 400px;
   max-width: 90vw;
   min-height: 150px;
@@ -1083,7 +1083,7 @@ th.mat-header-cell .mat-sort-header-container {
   padding: 15px;
   outline: none;
   resize: vertical;
-  animation: popIn 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  opacity: 0;
   pointer-events: auto;
 }
 

@@ -456,6 +456,10 @@ export class AppComponent implements AfterViewInit {
 
         textarea.style.top = `${top}px`;
 
+        // Reveal with animation after positioning
+        textarea.style.opacity = '1';
+        textarea.style.animation = 'popIn 0.18s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards';
+
         textarea.focus({ preventScroll: true });
       }
     }, 50);
