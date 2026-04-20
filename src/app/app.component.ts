@@ -401,11 +401,61 @@ export class AppComponent implements AfterViewInit {
     if (field === 'isEditingReview') element.isEditingReview = true;
     else if (field === 'isEditingHatyjaComments') element.isEditingHatyjaComments = true;
 
-    // Focus the textarea without jumping the scroll
-    const container = (event.currentTarget as HTMLElement).closest('.review-container');
+    // Capture rect NOW — event.currentTarget is lost inside setTimeout
+    const triggerEl = event.currentTarget as HTMLElement;
+    const triggerRect = triggerEl.getBoundingClientRect();
+    const container = triggerEl.closest('.review-container');
     setTimeout(() => {
       const textarea = container?.querySelector('textarea') as HTMLTextAreaElement;
       if (textarea) {
+        const margin = 12;
+        const minHeight = 150;
+        const maxPreferredHeight = 320;
+        const gap = 8;
+        const desiredWidth = Math.min(420, window.innerWidth - margin * 2);
+
+        const availableAbove = Math.max(0, triggerRect.top - margin - gap);
+        const availableBelow = Math.max(0, window.innerHeight - triggerRect.bottom - margin - gap);
+        const isTopZone = triggerRect.top < window.innerHeight * 0.45;
+        let placeBelow = isTopZone;
+        if (!isTopZone) {
+          if (availableBelow >= minHeight) {
+            placeBelow = true;
+          } else if (availableAbove >= minHeight) {
+            placeBelow = false;
+          } else {
+            placeBelow = availableBelow >= availableAbove;
+          }
+        }
+
+        const availableOnSide = placeBelow ? availableBelow : availableAbove;
+        const popupMaxHeight = Math.max(minHeight, Math.min(maxPreferredHeight, availableOnSide || minHeight));
+
+        textarea.style.maxHeight = `${popupMaxHeight}px`;
+        textarea.style.overflowY = 'auto';
+
+        let left = triggerRect.right - desiredWidth;
+        left = Math.max(margin, Math.min(left, window.innerWidth - desiredWidth - margin));
+
+        textarea.style.position = 'fixed';
+        textarea.style.bottom = 'auto';
+        textarea.style.right = 'auto';
+        textarea.style.left = `${left}px`;
+        textarea.style.width = `${desiredWidth}px`;
+        textarea.style.maxWidth = `${window.innerWidth - margin * 2}px`;
+        textarea.style.zIndex = '11000';
+
+        const measuredHeight = Math.max(textarea.getBoundingClientRect().height || 0, minHeight);
+        const topIfBelow = triggerRect.bottom + gap;
+        const topIfAbove = triggerRect.top - measuredHeight - gap;
+        let top = placeBelow ? topIfBelow : topIfAbove;
+        if (top < margin) top = margin;
+        if (top + measuredHeight > window.innerHeight - margin) {
+          top = Math.max(margin, window.innerHeight - measuredHeight - margin);
+        }
+
+        textarea.style.top = `${top}px`;
+
         textarea.focus({ preventScroll: true });
       }
     }, 50);
