@@ -910,7 +910,8 @@ th.mat-column-djFalsePositive {
 }
 
 th.mat-column-hatyjaReviewComments,
-th.mat-column-hatyjaComments {
+th.mat-column-hatyjaComments,
+th.mat-column-emailCommunications {
   background-color: #eff6ff !important;
   color: #1e40af !important;
   border-bottom: 2px solid #bfdbfe;

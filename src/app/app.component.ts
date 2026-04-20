@@ -42,9 +42,11 @@ export interface ApplicantRecord {
   djFalsePositive?: string;
   escalationRequired?: string;
   hatyjaComments?: string;
+  emailCommunications?: string;
   // UI flags
   isEditingReview?: boolean;
   isEditingHatyjaComments?: boolean;
+  isEditingEmailCommunications?: boolean;
 }
 
 export interface DashboardStats {
@@ -386,13 +388,14 @@ export class AppComponent implements AfterViewInit {
     });
   }
 
-  toggleReviewEdit(element: ApplicantRecord, field: 'isEditingReview' | 'isEditingHatyjaComments', event: MouseEvent) {
+  toggleReviewEdit(element: ApplicantRecord, field: 'isEditingReview' | 'isEditingHatyjaComments' | 'isEditingEmailCommunications', event: MouseEvent) {
     event.stopPropagation();
 
     // First, clear any other editing states in all records to avoid multiple textareas
     this.dataSource.data.forEach(r => {
       r.isEditingReview = false;
       r.isEditingHatyjaComments = false;
+      r.isEditingEmailCommunications = false;
     });
 
     this.editingReviewElement = element;
@@ -400,6 +403,7 @@ export class AppComponent implements AfterViewInit {
     // Set the specific editing flag
     if (field === 'isEditingReview') element.isEditingReview = true;
     else if (field === 'isEditingHatyjaComments') element.isEditingHatyjaComments = true;
+    else if (field === 'isEditingEmailCommunications') element.isEditingEmailCommunications = true;
 
     // Capture rect NOW — event.currentTarget is lost inside setTimeout
     const triggerEl = event.currentTarget as HTMLElement;
@@ -469,6 +473,7 @@ export class AppComponent implements AfterViewInit {
     if (this.editingReviewElement) {
       this.editingReviewElement.isEditingReview = false;
       this.editingReviewElement.isEditingHatyjaComments = false;
+      this.editingReviewElement.isEditingEmailCommunications = false;
     }
     this.editingReviewElement = null;
     this.saveToStorage();
@@ -692,7 +697,8 @@ export class AppComponent implements AfterViewInit {
     djTruePositive: true,
     djFalsePositive: true,
     escalationRequired: true,
-    hatyjaComments: true
+    hatyjaComments: true,
+    emailCommunications: true
   };
 
   updateDisplayedColumns() {
@@ -726,7 +732,7 @@ export class AppComponent implements AfterViewInit {
   columnKeys = [
     'applicant', 'acronym', 'entityType',
     'submittedAt', 'preScreening', 'profiles',
-    'country', 'address', 'nolStatus', 'hatyjaReviewComments', 'redFlags', 'passed',
+    'country', 'address', 'nolStatus', 'hatyjaReviewComments', 'emailCommunications', 'redFlags', 'passed',
     'djResult', 'djReportNumber', 'djReportLink', 'djTruePositive', 'djFalsePositive', 'escalationRequired', 'hatyjaComments'
   ];
   columnNames: { [key: string]: string } = {
@@ -748,7 +754,8 @@ export class AppComponent implements AfterViewInit {
     djTruePositive: 'DJ: True positive',
     djFalsePositive: 'DJ: False positive',
     escalationRequired: 'Escalation required to DRMC/Compliance?',
-    hatyjaComments: 'Hatyja comments'
+    hatyjaComments: 'Hatyja comments',
+    emailCommunications: 'Email Communications'
   };
 
   // Selection helpers
