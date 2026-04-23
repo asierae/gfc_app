@@ -927,7 +927,7 @@ export class AppComponent implements AfterViewInit {
             else if (colName.includes('dj-result') || colName.includes('dj result')) { tempIdxDjRes = index; matches++; }
             else if (colName.includes('report number') || colName.includes('dj report no')) { tempIdxDjNum = index; matches++; }
             else if (colName.includes('report link') || colName.includes('dj link')) { tempIdxDjLnk = index; matches++; }
-            else if (colName.includes('profiles') || colName.includes('profile') || colName.includes('url')) { tempIdxProf = index; matches++; }
+            else if (colName.includes('profiles') || colName.includes('profile') || colName.includes('draft id') || colName.includes('draft_id') || colName.includes('url')) { tempIdxProf = index; matches++; }
             else if (colName.includes('true positive')) { tempIdxDjT = index; matches++; }
             else if (colName.includes('false positive')) { tempIdxDjF = index; matches++; }
             else if (colName.includes('escalation')) { tempIdxEsc = index; matches++; }
