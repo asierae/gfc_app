@@ -208,9 +208,10 @@
   filter: saturate(1.2) brightness(1.05);
 }
 
-.pie-slice.accepted { stroke: #22c55e; }
-.pie-slice.rejected { stroke: #ef4444; }
-.pie-slice.pending  { stroke: #cbd5e1; }
+.pie-slice.status-passed  { stroke: #22c55e; }
+.pie-slice.status-failed  { stroke: #ef4444; }
+.pie-slice.status-invited { stroke: #3b82f6; }
+.pie-slice.status-pending { stroke: #cbd5e1; }
 
 .pie-legend {
   display: flex;
@@ -233,9 +234,10 @@
   flex-shrink: 0;
 }
 
-.dot.accepted { background-color: #22c55e; }
-.dot.rejected { background-color: #ef4444; }
-.dot.pending  { background-color: #cbd5e1; }
+.dot.status-passed  { background-color: #22c55e; }
+.dot.status-failed  { background-color: #ef4444; }
+.dot.status-invited { background-color: #3b82f6; }
+.dot.status-pending { background-color: #cbd5e1; }
 
 .legend-item .label {
   color: #64748b;
@@ -1044,6 +1046,11 @@ th.mat-header-cell .mat-sort-header-container {
 .status-active { background-color: #dcfce7; color: #15803d; }
 .status-pending { background-color: #fef3c7; color: #b45309; }
 .status-inactive { background-color: #fee2e2; color: #b91c1c; }
+
+.status-passed-cell  { background-color: #dcfce7; color: #15803d; font-weight: 600; }
+.status-failed-cell  { background-color: #fee2e2; color: #b91c1c; font-weight: 600; }
+.status-invited-cell { background-color: #dbeafe; color: #1e40af; font-weight: 600; }
+.status-pending-cell { background-color: #fef3c7; color: #b45309; font-weight: 600; }
 
 .editable-cell {
   background: transparent;
