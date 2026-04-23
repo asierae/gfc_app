@@ -267,7 +267,12 @@ export class AppComponent implements AfterViewInit {
   ngAfterViewInit() {
     this.dataSource.paginator = this.paginator;
     this.dataSource.sort = this.sort;
-    
+
+    // Default sort: Submitted At ascending (earliest first)
+    this.sort.active = 'submittedAt';
+    this.sort.direction = 'asc';
+    this.sort.sortChange.emit({ active: 'submittedAt', direction: 'asc' });
+
     // Set up custom sorting logic for dates vs text
     this.dataSource.sortingDataAccessor = (item: ApplicantRecord, property: string) => {
       switch (property) {
