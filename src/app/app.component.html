@@ -517,7 +517,13 @@
             <div #resizerDjRes class="custom-resizer" (mousedown)="initResize($event, resizerDjRes)"></div>
           </th>
           <td mat-cell *matCellDef="let element" [hidden]="!columnVisibility.djResult">
-            <input type="text" [(ngModel)]="element.djResult" class="editable-cell" (blur)="saveToStorage()">
+            <select [(ngModel)]="element.djResult" class="editable-cell status-input"
+              [ngClass]="{'status-passed-cell': element.djResult === 'Yes', 'status-failed-cell': element.djResult === 'No'}"
+              (change)="saveToStorage()">
+              <option value="" style="background-color: white; color: black;"></option>
+              <option value="Yes" style="background-color: #dcfce7; color: #15803d; font-weight: 600;">Yes</option>
+              <option value="No" style="background-color: #fee2e2; color: #b91c1c; font-weight: 600;">No</option>
+            </select>
           </td>
         </ng-container>
 
@@ -555,7 +561,14 @@
             <div #resizerDjT class="custom-resizer" (mousedown)="initResize($event, resizerDjT)"></div>
           </th>
           <td mat-cell *matCellDef="let element" [hidden]="!columnVisibility.djTruePositive">
-            <input type="text" [(ngModel)]="element.djTruePositive" class="editable-cell" (blur)="saveToStorage()">
+            <select [(ngModel)]="element.djTruePositive" class="editable-cell status-input"
+              [ngClass]="{'status-passed-cell': element.djTruePositive === 'Yes', 'status-failed-cell': element.djTruePositive === 'No', 'status-pending-cell': element.djTruePositive === 'N/A'}"
+              (change)="saveToStorage()">
+              <option value="" style="background-color: white; color: black;"></option>
+              <option value="Yes" style="background-color: #dcfce7; color: #15803d; font-weight: 600;">Yes</option>
+              <option value="No" style="background-color: #fee2e2; color: #b91c1c; font-weight: 600;">No</option>
+              <option value="N/A" style="background-color: #fef3c7; color: #b45309; font-weight: 600;">N/A</option>
+            </select>
           </td>
         </ng-container>
 
@@ -566,7 +579,14 @@
             <div #resizerDjF class="custom-resizer" (mousedown)="initResize($event, resizerDjF)"></div>
           </th>
           <td mat-cell *matCellDef="let element" [hidden]="!columnVisibility.djFalsePositive">
-            <input type="text" [(ngModel)]="element.djFalsePositive" class="editable-cell" (blur)="saveToStorage()">
+            <select [(ngModel)]="element.djFalsePositive" class="editable-cell status-input"
+              [ngClass]="{'status-passed-cell': element.djFalsePositive === 'Yes', 'status-failed-cell': element.djFalsePositive === 'No', 'status-pending-cell': element.djFalsePositive === 'N/A'}"
+              (change)="saveToStorage()">
+              <option value="" style="background-color: white; color: black;"></option>
+              <option value="Yes" style="background-color: #dcfce7; color: #15803d; font-weight: 600;">Yes</option>
+              <option value="No" style="background-color: #fee2e2; color: #b91c1c; font-weight: 600;">No</option>
+              <option value="N/A" style="background-color: #fef3c7; color: #b45309; font-weight: 600;">N/A</option>
+            </select>
           </td>
         </ng-container>
 

@@ -1007,11 +1007,26 @@ export class AppComponent implements AfterViewInit {
                 ? `https://partners.greenclimate.fund/pre-accreditation/${val}/staff/preview`
                 : val;
             })(),
-            djResult: cellStr(idxDjResult, row),
+            djResult: (() => {
+              const raw = cellStr(idxDjResult, row).toLowerCase();
+              return raw === 'yes' ? 'Yes' : (raw ? 'No' : '');
+            })(),
             djReportNumber: cellStr(idxDjNumber, row),
             djReportLink: cellStr(idxDjLink, row),
-            djTruePositive: cellStr(idxDjTrue, row),
-            djFalsePositive: cellStr(idxDjFalse, row),
+            djTruePositive: (() => {
+              const raw = cellStr(idxDjTrue, row).toLowerCase();
+              if (raw === 'yes') return 'Yes';
+              if (raw === 'no') return 'No';
+              if (raw === 'n/a' || raw === 'na') return 'N/A';
+              return '';
+            })(),
+            djFalsePositive: (() => {
+              const raw = cellStr(idxDjFalse, row).toLowerCase();
+              if (raw === 'yes') return 'Yes';
+              if (raw === 'no') return 'No';
+              if (raw === 'n/a' || raw === 'na') return 'N/A';
+              return '';
+            })(),
             escalationRequired: cellStr(idxEscalation, row),
             hatyjaComments: cellStr(idxHatyjaExtra, row),
             emailCommunications: cellStr(idxEmailComm, row)
@@ -1264,6 +1279,17 @@ export class AppComponent implements AfterViewInit {
       return (val && !val.startsWith('http'))
         ? `https://partners.greenclimate.fund/pre-accreditation/${val}/staff/preview`
         : val;
+    }
+    if (key === 'djResult') {
+      const raw = cellStr(idx, row).toLowerCase();
+      return raw === 'yes' ? 'Yes' : (raw ? 'No' : '');
+    }
+    if (key === 'djTruePositive' || key === 'djFalsePositive') {
+      const raw = cellStr(idx, row).toLowerCase();
+      if (raw === 'yes') return 'Yes';
+      if (raw === 'no') return 'No';
+      if (raw === 'n/a' || raw === 'na') return 'N/A';
+      return '';
     }
     return cellStr(idx, row);
   }
