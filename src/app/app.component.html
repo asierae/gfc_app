@@ -170,6 +170,43 @@
     </div>
   </mat-expansion-panel>
 
+  <!-- Investigation Skills Panel -->
+  <mat-expansion-panel class="selection-panel skills-panel">
+    <mat-expansion-panel-header>
+      <mat-panel-title>
+        <mat-icon style="margin-right: 8px; color: #64748b;">psychology</mat-icon>
+        Risk Investigation Skills
+      </mat-panel-title>
+      <mat-panel-description>
+        Configure the criteria used for AI risk analysis
+      </mat-panel-description>
+    </mat-expansion-panel-header>
+
+    <div class="skills-container">
+      <div *ngFor="let skill of investigationSkills; let i = index" class="skill-card">
+        <div class="skill-header">
+          <input type="text" [(ngModel)]="skill.label" class="skill-label-input" placeholder="Skill name">
+          <button mat-icon-button class="skill-delete-btn" (click)="removeSkill(i)" matTooltip="Remove skill">
+            <mat-icon>delete_outline</mat-icon>
+          </button>
+        </div>
+        <textarea [(ngModel)]="skill.prompt" class="skill-prompt-input" rows="3" placeholder="Describe what to investigate..."></textarea>
+      </div>
+
+      <div class="skills-actions">
+        <button mat-stroked-button (click)="addSkill()" class="skill-add-btn">
+          <mat-icon>add</mat-icon> Add Skill
+        </button>
+        <button mat-stroked-button (click)="resetSkills()" class="skill-reset-btn" matTooltip="Restore default skills">
+          <mat-icon>restart_alt</mat-icon> Reset Defaults
+        </button>
+        <button mat-flat-button color="primary" (click)="saveSkills()" class="skill-save-btn">
+          <mat-icon>save</mat-icon> Save Skills
+        </button>
+      </div>
+    </div>
+  </mat-expansion-panel>
+
   <!-- SEARCH & QUICK ACTIONS BAR -->
   <div class="search-and-actions-row">
     <div class="search-bar-wrapper">
@@ -410,10 +447,10 @@
           </td>
         </ng-container>
 
-        <!-- NOL Status Column -->
+        <!-- NL Status Column -->
         <ng-container matColumnDef="nolStatus">
           <th mat-header-cell *matHeaderCellDef mat-sort-header [hidden]="!columnVisibility.nolStatus">
-            NOL Status
+            NL Status
             <div #resizerNol class="custom-resizer" (mousedown)="initResize($event, resizerNol)"></div>
           </th>
           <td mat-cell *matCellDef="let element" [hidden]="!columnVisibility.nolStatus">
@@ -623,6 +660,70 @@
                 (blur)="closeReviewEdit()"
                 (mouseleave)="closeReviewEdit()"
                 rows="4"></textarea>
+            </div>
+          </td>
+        </ng-container>
+
+        <!-- Risk % Column -->
+        <ng-container matColumnDef="riskPercent">
+          <th mat-header-cell *matHeaderCellDef mat-sort-header [hidden]="!columnVisibility.riskPercent">
+            Risk %
+            <div #resizerRisk class="custom-resizer" (mousedown)="initResize($event, resizerRisk)"></div>
+          </th>
+          <td mat-cell *matCellDef="let element" [hidden]="!columnVisibility.riskPercent">
+            <div class="risk-cell">
+              <div *ngIf="element.isCalculatingRisk" class="risk-loading">
+                <mat-icon class="spin-icon">hourglass_empty</mat-icon>
+                <span>Analyzing…</span>
+              </div>
+              <div *ngIf="!element.isCalculatingRisk && element.riskPercent != null" class="risk-badge"
+                [ngClass]="{
+                  'risk-low': element.riskPercent <= 20,
+                  'risk-medium-low': element.riskPercent > 20 && element.riskPercent <= 40,
+                  'risk-medium': element.riskPercent > 40 && element.riskPercent <= 60,
+                  'risk-high': element.riskPercent > 60 && element.riskPercent <= 80,
+                  'risk-critical': element.riskPercent > 80
+                }"
+                [matTooltip]="'Risk: ' + element.riskPercent + '%'">
+                {{ element.riskPercent }}%
+              </div>
+              <button *ngIf="!element.isCalculatingRisk"
+                class="risk-calc-btn"
+                (click)="calculateRisk(element)"
+                [matTooltip]="element.riskPercent != null ? 'Recalculate risk' : 'Calculate risk'">
+                <mat-icon>{{ element.riskPercent != null ? 'refresh' : 'search' }}</mat-icon>
+                <span *ngIf="element.riskPercent == null">Calculate</span>
+              </button>
+            </div>
+          </td>
+        </ng-container>
+
+        <!-- Reasons Column -->
+        <ng-container matColumnDef="riskReasons">
+          <th mat-header-cell *matHeaderCellDef mat-sort-header [hidden]="!columnVisibility.riskReasons">
+            Reasons
+            <div #resizerReasons class="custom-resizer" (mousedown)="initResize($event, resizerReasons)"></div>
+          </th>
+          <td mat-cell *matCellDef="let element" [hidden]="!columnVisibility.riskReasons" class="review-cell"
+              [class.review-cell-editing]="element === editingReviewElement && element.isEditingRiskReasons">
+            <div class="review-container">
+              <div *ngIf="element !== editingReviewElement || !element.isEditingRiskReasons"
+                class="reasons-view"
+                (click)="toggleReviewEdit(element, 'isEditingRiskReasons', $event)">
+                <div *ngFor="let r of parseReasons(element.riskReasons)" class="reason-line"
+                  [ngClass]="{'reason-positive': r.type === 'positive', 'reason-negative': r.type === 'negative'}">
+                  <span class="reason-icon">{{ r.type === 'positive' ? '+' : r.type === 'negative' ? '−' : '•' }}</span>
+                  {{ r.text }}
+                </div>
+                <span *ngIf="!element.riskReasons" class="text-muted" style="font-size: 12px; cursor: pointer;">Click to edit</span>
+              </div>
+
+              <textarea *ngIf="element === editingReviewElement && element.isEditingRiskReasons"
+                [(ngModel)]="element.riskReasons"
+                class="premium-textarea"
+                (blur)="closeReviewEdit()"
+                (mouseleave)="closeReviewEdit()"
+                rows="6"></textarea>
             </div>
           </td>
         </ng-container>

@@ -43,10 +43,15 @@ export interface ApplicantRecord {
   escalationRequired?: string;
   hatyjaComments?: string;
   emailCommunications?: string;
+  // Risk analysis
+  riskPercent?: number | null;
+  riskReasons?: string;
+  isCalculatingRisk?: boolean;
   // UI flags
   isEditingReview?: boolean;
   isEditingHatyjaComments?: boolean;
   isEditingEmailCommunications?: boolean;
+  isEditingRiskReasons?: boolean;
 }
 
 export interface DashboardStats {
@@ -66,13 +71,7 @@ export interface DashboardStats {
   entityTypeCounts: { name: string; count: number; pct: number }[];
 }
 
-const ELEMENT_DATA: ApplicantRecord[] = [
-  { applicant: 'Acme Corp', acronym: 'AC', entityType: 'Corporation', submittedAt: new Date('2023-01-15'), preScreening: 'Pass', profiles: 'https://example.com/acme', country: 'USA', address: '123 Main St', nolStatus: 'Active', hatyjaReviewComments: 'Looks good', redFlags: 'None', passed: 'Passed', djResult: 'Clean', djReportNumber: 'DJ-101', djReportLink: 'https://dj.com/101', djTruePositive: 'No', djFalsePositive: 'No', escalationRequired: 'No', hatyjaComments: 'Ready for full review' },
-  { applicant: 'Global Tech', acronym: 'GT', entityType: 'LLC', submittedAt: new Date('2023-02-10'), preScreening: 'Pending', profiles: 'https://example.com/gt', country: 'UK', address: '', nolStatus: 'Pending', hatyjaReviewComments: 'Needs more info', redFlags: 'Incomplete documents', passed: '', djResult: 'Warning', djReportNumber: 'DJ-202', djReportLink: 'https://dj.com/202', djTruePositive: 'Maybe', djFalsePositive: 'No', escalationRequired: 'Yes', hatyjaComments: 'Contact client' },
-  { applicant: 'HealthPlus', acronym: 'HP', entityType: 'Non-Profit', submittedAt: new Date('2023-03-05'), preScreening: 'Fail', profiles: 'https://example.com/hp', country: 'Canada', address: '456 Maple Ave', nolStatus: 'Inactive', hatyjaReviewComments: 'Check compliance', redFlags: 'Expired license', passed: 'Failed', djResult: 'Critical', djReportNumber: 'DJ-303', djReportLink: 'https://dj.com/303', djTruePositive: 'Yes', djFalsePositive: 'No', escalationRequired: 'Immediate', hatyjaComments: 'Review blocked' },
-  { applicant: 'FinServe', acronym: 'FS', entityType: 'Partnership', submittedAt: new Date('2023-04-20'), preScreening: 'Pass', profiles: 'https://example.com/fs', country: 'Australia', address: '789 Wall St', nolStatus: 'Active', hatyjaReviewComments: 'All clear', redFlags: 'None', passed: 'Invited', djResult: 'Clean', djReportNumber: 'DJ-404', djReportLink: 'https://dj.com/404', djTruePositive: 'No', djFalsePositive: 'No', escalationRequired: 'No', hatyjaComments: 'Good to go' },
-  { applicant: 'ConstructCo', acronym: 'CC', entityType: 'Corporation', submittedAt: new Date('2023-05-12'), preScreening: 'Review', profiles: 'https://example.com/cc', country: 'Germany', address: '', nolStatus: 'Pending', hatyjaReviewComments: 'Pending review', redFlags: 'High risk', passed: '', djResult: 'Manual', djReportNumber: 'DJ-505', djReportLink: 'https://dj.com/505', djTruePositive: 'No', djFalsePositive: 'Yes', escalationRequired: 'To DRMC', hatyjaComments: 'Check financial year 2022' }
-];
+const ELEMENT_DATA: ApplicantRecord[] = [];
 
 const STORAGE_KEY = 'gfc_applicant_data';
 
@@ -117,6 +116,36 @@ export class AppComponent implements AfterViewInit {
   filterStatus: string = 'All';
   readonly statusOptions: string[] = ['All', 'Pending', 'Passed', 'Failed', 'Invited'];
   private readonly validPassedValues = new Set(['Pending', 'Passed', 'Failed', 'Invited']);
+
+  // --- Risk Investigation Skills (extensible list) ---
+  private readonly SKILLS_STORAGE = 'gfc_investigation_skills';
+  private readonly defaultSkills: { id: string; label: string; prompt: string }[] = [
+    {
+      id: 'webpage_check',
+      label: 'Website Reliability',
+      prompt: 'Visit or research the official website of the organization. Evaluate if the website looks professional, is well-maintained, has been active for several years, and contains verifiable contact information. If the website looks newly created, poorly designed, or lacks transparency, flag it as higher risk. Also check if the organization\'s portfolio, projects, or mission are related to climate change, environmental sustainability, or green development. If none of their work is climate-related, flag this as a negative finding.'
+    },
+    {
+      id: 'corruption_news',
+      label: 'Corruption & Legal Issues',
+      prompt: 'Search for any news articles, legal cases, or reports in the last 5 years involving this organization in corruption, fraud, money laundering, sanctions violations, or any other financial crime. Include specific sources and dates if found.'
+    },
+    {
+      id: 'dj_riskcenter',
+      label: 'Dow Jones RiskCenter',
+      prompt: 'Check if the organization or its key executives appear in Dow Jones RiskCenter databases, including sanctions lists, watchlists, Politically Exposed Persons (PEP) lists, adverse media, or state-owned enterprise flags. Report any matches found and their risk categories.'
+    },
+    {
+      id: 'sanctions_check',
+      label: 'Sanctions Screening (UN/US/EU)',
+      prompt: 'Confirm that all relevant parties are not listed under UN Security Council financial sanctions. Verify that the applicant entity and any applicable beneficial owners or controllers are not subject to sanctions under UN, US (OFAC), or EU regimes. Report any matches or close associations found.'
+    }
+  ];
+  investigationSkills: { id: string; label: string; prompt: string }[] = [];
+
+  // Gemini API configuration
+  private geminiApiKey: string = '';
+  private readonly GEMINI_KEY_STORAGE = 'gfc_gemini_api_key';
   statusOptionsWithCount: { value: string; label: string }[] = [];
   readonly entityTypeOptions: string[] = [
     'All',
@@ -262,6 +291,8 @@ export class AppComponent implements AfterViewInit {
     this.syncSelectedKeys();
     this.updateDisplayedColumns();
     this.deferFilterCountRefresh();
+    this.geminiApiKey = localStorage.getItem(this.GEMINI_KEY_STORAGE) || '';
+    this.loadSkills();
   }
 
   ngAfterViewInit() {
@@ -367,6 +398,8 @@ export class AppComponent implements AfterViewInit {
               if (!isNaN(d.getTime())) record.submittedAt = d;
             }
           });
+          const withRisk = parsed.filter((r: any) => r.riskPercent != null);
+          console.log(`Loading ${parsed.length} records (${withRisk.length} with risk scores)`, withRisk.length ? withRisk[0] : '');
           this.dataSource.data = parsed;
           this.deferFilterCountRefresh();
           this.showToast(`${parsed.length} records loaded.`, 'info');
@@ -401,7 +434,7 @@ export class AppComponent implements AfterViewInit {
     });
   }
 
-  toggleReviewEdit(element: ApplicantRecord, field: 'isEditingReview' | 'isEditingHatyjaComments' | 'isEditingEmailCommunications', event: MouseEvent) {
+  toggleReviewEdit(element: ApplicantRecord, field: 'isEditingReview' | 'isEditingHatyjaComments' | 'isEditingEmailCommunications' | 'isEditingRiskReasons', event: MouseEvent) {
     event.stopPropagation();
 
     // First, clear any other editing states in all records to avoid multiple textareas
@@ -409,6 +442,7 @@ export class AppComponent implements AfterViewInit {
       r.isEditingReview = false;
       r.isEditingHatyjaComments = false;
       r.isEditingEmailCommunications = false;
+      r.isEditingRiskReasons = false;
     });
 
     this.editingReviewElement = element;
@@ -417,6 +451,7 @@ export class AppComponent implements AfterViewInit {
     if (field === 'isEditingReview') element.isEditingReview = true;
     else if (field === 'isEditingHatyjaComments') element.isEditingHatyjaComments = true;
     else if (field === 'isEditingEmailCommunications') element.isEditingEmailCommunications = true;
+    else if (field === 'isEditingRiskReasons') element.isEditingRiskReasons = true;
 
     // Capture rect NOW — event.currentTarget is lost inside setTimeout
     const triggerEl = event.currentTarget as HTMLElement;
@@ -487,6 +522,7 @@ export class AppComponent implements AfterViewInit {
       this.editingReviewElement.isEditingReview = false;
       this.editingReviewElement.isEditingHatyjaComments = false;
       this.editingReviewElement.isEditingEmailCommunications = false;
+      this.editingReviewElement.isEditingRiskReasons = false;
     }
     this.editingReviewElement = null;
     this.saveToStorage();
@@ -684,7 +720,10 @@ export class AppComponent implements AfterViewInit {
   }
 
   saveToStorage() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(this.dataSource.data));
+    const data = this.dataSource.data;
+    const withRisk = data.filter(r => r.riskPercent != null);
+    if (withRisk.length) console.log(`Saving ${data.length} records (${withRisk.length} with risk scores)`);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   }
 
   saveColumnVisibility() {
@@ -712,7 +751,9 @@ export class AppComponent implements AfterViewInit {
     djFalsePositive: true,
     escalationRequired: true,
     hatyjaComments: true,
-    emailCommunications: true
+    emailCommunications: true,
+    riskPercent: true,
+    riskReasons: true
   };
 
   updateDisplayedColumns() {
@@ -747,7 +788,8 @@ export class AppComponent implements AfterViewInit {
     'applicant', 'acronym', 'entityType',
     'submittedAt', 'preScreening', 'profiles',
     'country', 'address', 'nolStatus', 'hatyjaReviewComments', 'emailCommunications', 'redFlags', 'passed',
-    'djResult', 'djReportNumber', 'djReportLink', 'djTruePositive', 'djFalsePositive', 'escalationRequired', 'hatyjaComments'
+    'djResult', 'djReportNumber', 'djReportLink', 'djTruePositive', 'djFalsePositive', 'escalationRequired', 'hatyjaComments',
+    'riskPercent', 'riskReasons'
   ];
   columnNames: { [key: string]: string } = {
     applicant: 'Applicant',
@@ -758,7 +800,7 @@ export class AppComponent implements AfterViewInit {
     profiles: 'Profiles',
     country: 'Country',
     address: 'Address',
-    nolStatus: 'NOL Status',
+    nolStatus: 'NL Status',
     hatyjaReviewComments: 'Hatyja Review comments',
     redFlags: 'Red Flags',
     passed: 'Status',
@@ -769,7 +811,9 @@ export class AppComponent implements AfterViewInit {
     djFalsePositive: 'DJ: False positive',
     escalationRequired: 'Escalation required to DRMC/Compliance?',
     hatyjaComments: 'Hatyja comments',
-    emailCommunications: 'Email Communications'
+    emailCommunications: 'Email Communications',
+    riskPercent: 'Risk %',
+    riskReasons: 'Reasons'
   };
 
   // Selection helpers
@@ -1297,6 +1341,200 @@ export class AppComponent implements AfterViewInit {
       return '';
     }
     return cellStr(idx, row);
+  }
+
+  // --- Investigation Skills Management ---
+  private loadSkills(): void {
+    const stored = localStorage.getItem(this.SKILLS_STORAGE);
+    if (stored) {
+      try {
+        this.investigationSkills = JSON.parse(stored);
+      } catch {
+        this.investigationSkills = [...this.defaultSkills];
+      }
+    } else {
+      this.investigationSkills = [...this.defaultSkills];
+    }
+  }
+
+  saveSkills(): void {
+    localStorage.setItem(this.SKILLS_STORAGE, JSON.stringify(this.investigationSkills));
+    this.showToast('Investigation skills saved.', 'success');
+  }
+
+  addSkill(): void {
+    const newId = 'skill_' + Date.now();
+    this.investigationSkills.push({ id: newId, label: 'New Skill', prompt: '' });
+  }
+
+  removeSkill(index: number): void {
+    this.investigationSkills.splice(index, 1);
+    this.saveSkills();
+  }
+
+  resetSkills(): void {
+    this.investigationSkills = [...this.defaultSkills];
+    this.saveSkills();
+  }
+
+  // --- Risk Calculation ---
+  promptForGeminiKey(): string | null {
+    const key = prompt('Enter your Gemini API Key.\nIt will be saved locally in your browser.', this.geminiApiKey || '');
+    if (key !== null && key.trim()) {
+      this.geminiApiKey = key.trim();
+      localStorage.setItem(this.GEMINI_KEY_STORAGE, this.geminiApiKey);
+    }
+    return key;
+  }
+
+  async calculateRisk(element: ApplicantRecord): Promise<void> {
+    if (!this.geminiApiKey) {
+      const key = this.promptForGeminiKey();
+      if (!key || !key.trim()) {
+        this.showToast('Gemini API key is required.', 'error');
+        return;
+      }
+    }
+
+    element.isCalculatingRisk = true;
+
+    const skillPrompts = this.investigationSkills.map(s => `### ${s.label}\n${s.prompt}`).join('\n\n');
+
+    const systemPrompt = `You are a risk analysis expert for the Green Climate Fund. Your task is to evaluate the risk of granting accreditation to an organization. You must be thorough, factual, and cite sources when possible.
+
+Analyze the following organization and assign a RISK PERCENTAGE from 0 to 100, where:
+- 0-20: Very low risk (well-established, reputable, no issues found)
+- 21-40: Low risk (generally reputable, minor concerns)
+- 41-60: Medium risk (some concerns found, needs further review)
+- 61-80: High risk (significant concerns, corruption cases, or unreliable presence)
+- 81-100: Very high risk (major red flags, active legal issues, fraud)
+
+Organization details:
+- Name: ${element.applicant}
+- Acronym: ${element.acronym || 'N/A'}
+- Entity Type: ${element.entityType || 'N/A'}
+- Country: ${element.country || 'N/A'}
+- Address: ${element.address || 'N/A'}
+
+Investigation criteria to evaluate:
+${skillPrompts}
+
+IMPORTANT: You MUST respond ONLY with a valid JSON object in the following format, no markdown, no code fences, just raw JSON.
+Each reason MUST start with [+] for positive findings (low risk indicators) or [-] for negative findings (risk indicators):
+{
+  "riskPercent": <number 0-100>,
+  "reasons": [
+    "[+] <positive finding with source URL if available>",
+    "[-] <negative finding with source URL if available>"
+  ]
+}`;
+
+    try {
+      const models = ['gemini-2.5-flash', 'gemini-2.5-pro'];
+      const maxRetriesPerModel = 4;
+      let response: Response | null = null;
+      let usedModel = '';
+
+      for (const model of models) {
+        let success = false;
+        for (let attempt = 0; attempt <= maxRetriesPerModel; attempt++) {
+          response = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${this.geminiApiKey}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [{ parts: [{ text: systemPrompt }] }],
+                generationConfig: {
+                  temperature: 0.2,
+                  maxOutputTokens: 16384
+                }
+              })
+            }
+          );
+
+          if ((response.status === 429 || response.status === 503) && attempt < maxRetriesPerModel) {
+            const baseWait = response.status === 503 ? 5 : 2;
+            const waitSec = baseWait * (attempt + 1);
+            const reason = response.status === 429 ? 'Rate limited' : 'Service busy';
+            console.warn(`${model} ${response.status} — retrying in ${waitSec}s (attempt ${attempt + 1}/${maxRetriesPerModel})`);
+            this.showToast(`${reason} (${model}). Retrying in ${waitSec}s…`, 'info');
+            await new Promise(r => setTimeout(r, waitSec * 1000));
+            continue;
+          }
+          if (response.ok) {
+            usedModel = model;
+            success = true;
+          }
+          break;
+        }
+        if (success) break;
+        if (response && (response.status === 404 || response.status === 429 || response.status === 503)) {
+          console.warn(`Model ${model} failed (${response.status}), trying next model…`);
+          this.showToast(`${model} unavailable, trying next model…`, 'info');
+          continue;
+        }
+        break;
+      }
+      if (usedModel) console.log(`Risk calculated using model: ${usedModel}`);
+
+      if (!response || !response.ok) {
+        const errBody = response ? await response.text() : 'No response';
+        const status = response?.status || 0;
+        console.error('Gemini API error:', status, errBody);
+        if (status === 401 || status === 403) {
+          this.geminiApiKey = '';
+          localStorage.removeItem(this.GEMINI_KEY_STORAGE);
+          this.showToast('Invalid API key. Please try again.', 'error');
+        } else if (status === 429) {
+          this.showToast('Rate limit exceeded. Please wait a moment and try again.', 'error');
+        } else {
+          this.showToast(`Gemini API error: ${status}`, 'error');
+        }
+        element.isCalculatingRisk = false;
+        return;
+      }
+
+      const data = await response.json();
+      console.log('Gemini full response:', JSON.stringify(data).substring(0, 500));
+
+      // Extract text from all parts (gemini-2.5-pro may include thinking parts)
+      const parts = data?.candidates?.[0]?.content?.parts || [];
+      const text = parts.map((p: any) => p.text || '').join('').trim();
+      console.log('Gemini extracted text:', text);
+
+      if (!text) {
+        throw new Error('Gemini returned an empty response. Please try again.');
+      }
+
+      // Parse JSON from response (handle possible code fences)
+      const jsonStr = text.replace(/```json\s*/g, '').replace(/```/g, '').trim();
+      const parsed = JSON.parse(jsonStr);
+
+      this.ngZone.run(() => {
+        element.riskPercent = Math.max(0, Math.min(100, Math.round(parsed.riskPercent)));
+        element.riskReasons = Array.isArray(parsed.reasons) ? parsed.reasons.join('\n') : String(parsed.reasons || '');
+        element.isCalculatingRisk = false;
+        this.saveToStorage();
+        this.showToast(`Risk calculated for ${element.applicant}: ${element.riskPercent}%`, 'success');
+      });
+    } catch (err: any) {
+      console.error('Risk calculation error:', err);
+      this.ngZone.run(() => {
+        this.showToast(`Error calculating risk: ${err.message || err}`, 'error');
+        element.isCalculatingRisk = false;
+      });
+    }
+  }
+
+  parseReasons(reasons: string | undefined): { text: string; type: 'positive' | 'negative' | 'neutral' }[] {
+    if (!reasons) return [];
+    return reasons.split('\n').filter(l => l.trim()).map(line => {
+      const trimmed = line.trim();
+      if (trimmed.startsWith('[+]')) return { text: trimmed.substring(3).trim(), type: 'positive' as const };
+      if (trimmed.startsWith('[-]')) return { text: trimmed.substring(3).trim(), type: 'negative' as const };
+      return { text: trimmed, type: 'neutral' as const };
+    });
   }
 
   private parseImportedDate(val: any): Date | undefined {
