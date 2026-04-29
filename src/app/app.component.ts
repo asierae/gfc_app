@@ -19,6 +19,7 @@ import { MatChipsModule } from '@angular/material/chips';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import * as XLSX from 'xlsx';
+import { FirestoreService } from './firestore.service';
 
 export interface ApplicantRecord {
   applicant: string;
@@ -67,7 +68,7 @@ export interface DashboardStats {
   invitedPct: number;
   pendingPct: number;
   redFlagsPct: number;
-  topCountriesRedFlags: { name: string; count: number }[];
+  topCountriesRedFlags: { name: string; count: number; avgRisk: number }[];
   entityTypeCounts: { name: string; count: number; pct: number }[];
 }
 
@@ -274,19 +275,25 @@ export class AppComponent implements AfterViewInit {
   };
 
   private getTopCountriesRedFlags(data: ApplicantRecord[]) {
-    const counts: Record<string, number> = {};
-    data.filter(d => d.redFlags && d.redFlags !== 'None' && d.country)
+    const grouped: Record<string, { total: number; sum: number }> = {};
+    data.filter(d => d.country && d.riskPercent != null)
       .forEach(d => {
-        counts[d.country] = (counts[d.country] || 0) + 1;
+        if (!grouped[d.country]) grouped[d.country] = { total: 0, sum: 0 };
+        grouped[d.country].total++;
+        grouped[d.country].sum += d.riskPercent!;
       });
 
-    return Object.keys(counts)
-      .map(name => ({ name, count: counts[name] }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 3);
+    return Object.keys(grouped)
+      .map(name => ({
+        name,
+        count: grouped[name].total,
+        avgRisk: Math.round(grouped[name].sum / grouped[name].total)
+      }))
+      .sort((a, b) => b.avgRisk - a.avgRisk)
+      .slice(0, 5);
   }
 
-  constructor(private ngZone: NgZone) {
+  constructor(private ngZone: NgZone, private firestoreService: FirestoreService) {
     this.buildCountryToRegionMap();
     this.syncSelectedKeys();
     this.updateDisplayedColumns();
@@ -375,7 +382,7 @@ export class AppComponent implements AfterViewInit {
       return matchesSearch && matchesRegion && matchesDate && matchesEntityType && matchesStatus;
     };
 
-    // Restore column visibility from localStorage
+    // Restore column visibility from localStorage, then Firestore
     const savedVisibility = localStorage.getItem('gfc_column_visibility');
     if (savedVisibility) {
       try {
@@ -385,28 +392,68 @@ export class AppComponent implements AfterViewInit {
         this.updateDisplayedColumns();
       } catch { /* ignore */ }
     }
-    // Load persisted data from localStorage on startup
+    this.firestoreService.loadColumnVisibility().then(parsed => {
+      if (parsed) {
+        this.ngZone.run(() => {
+          this.columnVisibility = { ...this.columnVisibility, ...parsed };
+          this.syncSelectedKeys();
+          this.updateDisplayedColumns();
+          localStorage.setItem('gfc_column_visibility', JSON.stringify(this.columnVisibility));
+        });
+      }
+    });
+    // Load from localStorage first (instant), then sync from Firestore
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          // Convert date strings back to Date objects
-          parsed.forEach(record => {
-            if (record.submittedAt) {
-              const d = new Date(record.submittedAt);
-              if (!isNaN(d.getTime())) record.submittedAt = d;
-            }
-          });
-          const withRisk = parsed.filter((r: any) => r.riskPercent != null);
-          console.log(`Loading ${parsed.length} records (${withRisk.length} with risk scores)`, withRisk.length ? withRisk[0] : '');
+          this.hydrateRecords(parsed);
           this.dataSource.data = parsed;
           this.deferFilterCountRefresh();
-          this.showToast(`${parsed.length} records loaded.`, 'info');
+          this.showToast(`${parsed.length} records loaded (local cache).`, 'info');
         }
       } catch { /* ignore corrupt data */ }
     }
 
+    // Then load from Firestore (source of truth)
+    this.loadFromFirestore();
+  }
+
+  private hydrateRecords(records: any[]) {
+    records.forEach(record => {
+      if (record.submittedAt) {
+        const d = new Date(record.submittedAt);
+        if (!isNaN(d.getTime())) record.submittedAt = d;
+      }
+    });
+  }
+
+  private readonly LOCAL_TIMESTAMP_KEY = 'gfc_data_updated_at';
+
+  private async loadFromFirestore() {
+    const result = await this.firestoreService.loadRecords();
+    if (!result || result.records.length === 0) return;
+
+    const localTimestamp = localStorage.getItem(this.LOCAL_TIMESTAMP_KEY) || '';
+    const cloudTimestamp = result.updatedAt || '';
+
+    if (localTimestamp && localTimestamp > cloudTimestamp) {
+      // Local is newer (offline edits) → push to Firestore
+      console.log('Local data is newer than cloud — syncing up.');
+      this.saveToFirestore(this.dataSource.data);
+      return;
+    }
+
+    // Cloud is newer or equal → use cloud data
+    this.hydrateRecords(result.records);
+    this.ngZone.run(() => {
+      this.dataSource.data = result.records;
+      this.deferFilterCountRefresh();
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(result.records));
+      localStorage.setItem(this.LOCAL_TIMESTAMP_KEY, cloudTimestamp);
+      this.showToast(`${result.records.length} records synced from cloud.`, 'success');
+    });
   }
 
   // Column resizing: runs OUTSIDE Angular zone for performance
@@ -716,18 +763,30 @@ export class AppComponent implements AfterViewInit {
     localStorage.removeItem(STORAGE_KEY);
     this.dataSource.data = [];
     this.deferFilterCountRefresh();
-    this.showToast('All data cleared from browser storage.', 'info');
+    this.firestoreService.clearRecords();
+    this.showToast('All data cleared.', 'info');
   }
+
+  private firestoreSaveTimeout: any = null;
 
   saveToStorage() {
     const data = this.dataSource.data;
-    const withRisk = data.filter(r => r.riskPercent != null);
-    if (withRisk.length) console.log(`Saving ${data.length} records (${withRisk.length} with risk scores)`);
+    const now = new Date().toISOString();
+    // Instant local cache + timestamp
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    localStorage.setItem(this.LOCAL_TIMESTAMP_KEY, now);
+    // Debounced cloud save (1s delay to batch rapid edits)
+    clearTimeout(this.firestoreSaveTimeout);
+    this.firestoreSaveTimeout = setTimeout(() => this.saveToFirestore(data), 1000);
+  }
+
+  private async saveToFirestore(data: ApplicantRecord[]) {
+    await this.firestoreService.saveRecords(data);
   }
 
   saveColumnVisibility() {
     localStorage.setItem('gfc_column_visibility', JSON.stringify(this.columnVisibility));
+    this.firestoreService.saveColumnVisibility(this.columnVisibility);
   }
 
   // Track the visibility of each column for selective export
@@ -1355,10 +1414,20 @@ export class AppComponent implements AfterViewInit {
     } else {
       this.investigationSkills = [...this.defaultSkills];
     }
+    // Async load from Firestore
+    this.firestoreService.loadSkills().then(skills => {
+      if (skills) {
+        this.ngZone.run(() => {
+          this.investigationSkills = skills;
+          localStorage.setItem(this.SKILLS_STORAGE, JSON.stringify(skills));
+        });
+      }
+    });
   }
 
   saveSkills(): void {
     localStorage.setItem(this.SKILLS_STORAGE, JSON.stringify(this.investigationSkills));
+    this.firestoreService.saveSkills(this.investigationSkills);
     this.showToast('Investigation skills saved.', 'success');
   }
 

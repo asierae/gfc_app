@@ -1287,6 +1287,11 @@ th.mat-header-cell .mat-sort-header-container {
   background-color: rgba(255, 255, 255, 0.1) !important;
 }
 
+/* ---- Dashboard Risk Text Colors ---- */
+.risk-text-low { color: #15803d; font-weight: 600; }
+.risk-text-medium { color: #c2410c; font-weight: 600; }
+.risk-text-high { color: #b91c1c; font-weight: 700; }
+
 /* ---- Investigation Skills Panel ---- */
 .skills-panel {
   margin-top: 4px !important;

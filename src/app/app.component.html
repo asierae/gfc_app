@@ -67,7 +67,11 @@
           <div class="country-item" *ngFor="let c of stats.topCountriesRedFlags; let i = index">
             <span class="rank">#{{ i + 1 }}</span>
             <span class="name">{{ c.name }}</span>
-            <span class="count">{{ c.count }}</span>
+            <span class="count" [ngClass]="{
+              'risk-text-low': c.avgRisk <= 30,
+              'risk-text-medium': c.avgRisk > 30 && c.avgRisk <= 60,
+              'risk-text-high': c.avgRisk > 60
+            }">{{ c.avgRisk }}% <small>({{ c.count }})</small></span>
           </div>
         </div>
       </div>
