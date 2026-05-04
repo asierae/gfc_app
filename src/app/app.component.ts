@@ -756,8 +756,11 @@ export class AppComponent implements AfterViewInit {
   private normalizeApplicantForSave(applicant: ApplicantRecord): any {
     const data: any = { ...applicant };
     // Convert submittedAt Date to ISO string for Firestore compatibility
+    // Handle empty/undefined/null by setting to null so Firestore stores it correctly
     if (data.submittedAt instanceof Date) {
       data.submittedAt = data.submittedAt.toISOString();
+    } else if (!data.submittedAt || String(data.submittedAt).trim() === '') {
+      data.submittedAt = null; // Explicit null for Firestore
     }
     // Remove UI-only flags before saving to Firestore
     delete data.isEditingReview;

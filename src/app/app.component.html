@@ -356,7 +356,7 @@
             <div #resizerApp class="custom-resizer" (mousedown)="initResize($event, resizerApp)"></div>
           </th>
           <td mat-cell *matCellDef="let element" [hidden]="!columnVisibility.applicant">
-            <input type="text" [(ngModel)]="element.applicant" class="editable-cell bold-text" (blur)="saveToStorage()">
+            <input type="text" [(ngModel)]="element.applicant" class="editable-cell bold-text" (blur)="saveToStorage(element)">
           </td>
         </ng-container>
 
@@ -367,7 +367,7 @@
             <div #resizerAcr class="custom-resizer" (mousedown)="initResize($event, resizerAcr)"></div>
           </th>
           <td mat-cell *matCellDef="let element" [hidden]="!columnVisibility.acronym">
-            <input type="text" [(ngModel)]="element.acronym" class="editable-cell text-muted" (blur)="saveToStorage()">
+            <input type="text" [(ngModel)]="element.acronym" class="editable-cell text-muted" (blur)="saveToStorage(element)">
           </td>
         </ng-container>
 
@@ -397,7 +397,7 @@
             <div #resizerEnt class="custom-resizer" (mousedown)="initResize($event, resizerEnt)"></div>
           </th>
           <td mat-cell *matCellDef="let element" [hidden]="!columnVisibility.entityType">
-            <input type="text" [(ngModel)]="element.entityType" class="editable-cell text-primary" (blur)="saveToStorage()">
+            <input type="text" [(ngModel)]="element.entityType" class="editable-cell text-primary" (blur)="saveToStorage(element)">
           </td>
         </ng-container>
 
@@ -409,7 +409,7 @@
           </th>
           <td mat-cell *matCellDef="let element" [hidden]="!columnVisibility.submittedAt">
             <div class="date-cell" (click)="picker.open()">
-              <input matInput [matDatepicker]="picker" [(ngModel)]="element.submittedAt" (dateChange)="saveToStorage()" class="editable-cell date-input" readonly>
+              <input matInput [matDatepicker]="picker" [(ngModel)]="element.submittedAt" (ngModelChange)="saveToStorage(element)" class="editable-cell date-input" readonly>
               <mat-datepicker #picker></mat-datepicker>
             </div>
           </td>
@@ -422,7 +422,7 @@
             <div #resizerPre class="custom-resizer" (mousedown)="initResize($event, resizerPre)"></div>
           </th>
           <td mat-cell *matCellDef="let element" [hidden]="!columnVisibility.preScreening">
-            <input type="text" [(ngModel)]="element.preScreening" class="editable-cell" (blur)="saveToStorage()">
+            <input type="text" [(ngModel)]="element.preScreening" class="editable-cell" (blur)="saveToStorage(element)">
           </td>
         </ng-container>
 
@@ -437,7 +437,7 @@
               <a *ngIf="element.profiles" [href]="element.profiles" target="_blank" class="url-link-btn">
                 <mat-icon>open_in_new</mat-icon>
               </a>
-              <input type="url" [(ngModel)]="element.profiles" class="editable-cell url-input" (blur)="saveToStorage()">
+              <input type="url" [(ngModel)]="element.profiles" class="editable-cell url-input" (blur)="saveToStorage(element)">
             </div>
           </td>
         </ng-container>
@@ -451,7 +451,7 @@
           <td mat-cell *matCellDef="let element" [hidden]="!columnVisibility.country">
             <div class="cell-content">
               <mat-icon class="small-icon">public</mat-icon>
-              <input type="text" [(ngModel)]="element.country" class="editable-cell" (blur)="saveToStorage()">
+              <input type="text" [(ngModel)]="element.country" class="editable-cell" (blur)="saveToStorage(element)">
             </div>
           </td>
         </ng-container>
@@ -465,7 +465,7 @@
           <td mat-cell *matCellDef="let element" [hidden]="!columnVisibility.address">
             <div class="cell-content">
               <mat-icon class="small-icon">place</mat-icon>
-              <input type="text" [(ngModel)]="element.address" class="editable-cell text-muted" (blur)="saveToStorage()">
+              <input type="text" [(ngModel)]="element.address" class="editable-cell text-muted" (blur)="saveToStorage(element)">
             </div>
           </td>
         </ng-container>
@@ -479,7 +479,7 @@
           <td mat-cell *matCellDef="let element" [hidden]="!columnVisibility.nolStatus">
             <input type="text" [(ngModel)]="element.nolStatus" class="editable-cell status-input"
               [ngClass]="element.nolStatus === 'Active' ? 'status-active' : (element.nolStatus === 'Pending' ? 'status-pending' : 'status-inactive')"
-              (blur)="saveToStorage()">
+              (blur)="saveToStorage(element)">
           </td>
         </ng-container>
 
@@ -546,7 +546,7 @@
           <td mat-cell *matCellDef="let element" [hidden]="!columnVisibility.redFlags">
             <div class="cell-content" [ngClass]="{'text-danger font-weight-bold': element.redFlags && element.redFlags !== 'None'}">
               <mat-icon *ngIf="element.redFlags && element.redFlags !== 'None'" class="small-icon error-icon">warning</mat-icon>
-              <input type="text" [(ngModel)]="element.redFlags" class="editable-cell" [ngClass]="{'text-danger': element.redFlags && element.redFlags !== 'None'}" (blur)="saveToStorage()">
+              <input type="text" [(ngModel)]="element.redFlags" class="editable-cell" [ngClass]="{'text-danger': element.redFlags && element.redFlags !== 'None'}" (blur)="saveToStorage(element)">
             </div>
           </td>
         </ng-container>
@@ -560,7 +560,7 @@
           <td mat-cell *matCellDef="let element" [hidden]="!columnVisibility.djResult">
             <select [(ngModel)]="element.djResult" class="editable-cell status-input"
               [ngClass]="{'status-passed-cell': element.djResult === 'Yes', 'status-failed-cell': element.djResult === 'No'}"
-              (change)="saveToStorage()">
+              (change)="saveToStorage(element)">
               <option value="" style="background-color: white; color: black;"></option>
               <option value="Yes" style="background-color: #dcfce7; color: #15803d; font-weight: 600;">Yes</option>
               <option value="No" style="background-color: #fee2e2; color: #b91c1c; font-weight: 600;">No</option>
@@ -575,7 +575,7 @@
             <div #resizerDjNum class="custom-resizer" (mousedown)="initResize($event, resizerDjNum)"></div>
           </th>
           <td mat-cell *matCellDef="let element" [hidden]="!columnVisibility.djReportNumber">
-            <input type="text" [(ngModel)]="element.djReportNumber" class="editable-cell" (blur)="saveToStorage()">
+            <input type="text" [(ngModel)]="element.djReportNumber" class="editable-cell" (blur)="saveToStorage(element)">
           </td>
         </ng-container>
 
@@ -590,7 +590,7 @@
               <a *ngIf="element.djReportLink" [href]="element.djReportLink" target="_blank" class="url-link-btn">
                 <mat-icon>open_in_new</mat-icon>
               </a>
-              <input type="url" [(ngModel)]="element.djReportLink" class="editable-cell url-input" (blur)="saveToStorage()">
+              <input type="url" [(ngModel)]="element.djReportLink" class="editable-cell url-input" (blur)="saveToStorage(element)">
             </div>
           </td>
         </ng-container>
@@ -604,7 +604,7 @@
           <td mat-cell *matCellDef="let element" [hidden]="!columnVisibility.djTruePositive">
             <select [(ngModel)]="element.djTruePositive" class="editable-cell status-input"
               [ngClass]="{'status-passed-cell': element.djTruePositive === 'Yes', 'status-failed-cell': element.djTruePositive === 'No', 'status-pending-cell': element.djTruePositive === 'N/A'}"
-              (change)="saveToStorage()">
+              (change)="saveToStorage(element)">
               <option value="" style="background-color: white; color: black;"></option>
               <option value="Yes" style="background-color: #dcfce7; color: #15803d; font-weight: 600;">Yes</option>
               <option value="No" style="background-color: #fee2e2; color: #b91c1c; font-weight: 600;">No</option>
@@ -622,7 +622,7 @@
           <td mat-cell *matCellDef="let element" [hidden]="!columnVisibility.djFalsePositive">
             <select [(ngModel)]="element.djFalsePositive" class="editable-cell status-input"
               [ngClass]="{'status-passed-cell': element.djFalsePositive === 'Yes', 'status-failed-cell': element.djFalsePositive === 'No', 'status-pending-cell': element.djFalsePositive === 'N/A'}"
-              (change)="saveToStorage()">
+              (change)="saveToStorage(element)">
               <option value="" style="background-color: white; color: black;"></option>
               <option value="Yes" style="background-color: #dcfce7; color: #15803d; font-weight: 600;">Yes</option>
               <option value="No" style="background-color: #fee2e2; color: #b91c1c; font-weight: 600;">No</option>
@@ -638,7 +638,7 @@
             <div #resizerEsc class="custom-resizer" (mousedown)="initResize($event, resizerEsc)"></div>
           </th>
           <td mat-cell *matCellDef="let element" [hidden]="!columnVisibility.escalationRequired">
-            <input type="text" [(ngModel)]="element.escalationRequired" class="editable-cell" (blur)="saveToStorage()">
+            <input type="text" [(ngModel)]="element.escalationRequired" class="editable-cell" (blur)="saveToStorage(element)">
           </td>
         </ng-container>
 
