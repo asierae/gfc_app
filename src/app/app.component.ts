@@ -445,8 +445,16 @@ export class AppComponent implements AfterViewInit {
     });
   }
 
+  private preEditSortState: { active: string; direction: string } | null = null;
+
   toggleReviewEdit(element: ApplicantRecord, field: 'isEditingReview' | 'isEditingHatyjaComments' | 'isEditingEmailCommunications' | 'isEditingRiskReasons', event: MouseEvent) {
     event.stopPropagation();
+
+    // Store sort state and disable sorting during edit to prevent any re-ordering
+    this.preEditSortState = {
+      active: this.sort.active,
+      direction: this.sort.direction
+    };
 
     // First, clear any other editing states in all records to avoid multiple textareas
     this.dataSource.data.forEach(r => {
@@ -463,6 +471,9 @@ export class AppComponent implements AfterViewInit {
     else if (field === 'isEditingHatyjaComments') element.isEditingHatyjaComments = true;
     else if (field === 'isEditingEmailCommunications') element.isEditingEmailCommunications = true;
     else if (field === 'isEditingRiskReasons') element.isEditingRiskReasons = true;
+
+    // Disable sort during editing by setting direction to empty
+    this.sort.direction = '';
 
     // Capture rect NOW — event.currentTarget is lost inside setTimeout
     const triggerEl = event.currentTarget as HTMLElement;
@@ -534,7 +545,16 @@ export class AppComponent implements AfterViewInit {
       this.editingReviewElement.isEditingHatyjaComments = false;
       this.editingReviewElement.isEditingEmailCommunications = false;
       this.editingReviewElement.isEditingRiskReasons = false;
+
       this.saveToStorage(this.editingReviewElement);
+
+      // Restore original sort state after editing (prevents any re-sorting)
+      if (this.preEditSortState) {
+        this.sort.active = this.preEditSortState.active;
+        this.sort.direction = this.preEditSortState.direction as any;
+        this.dataSource.sort = this.sort;
+        this.preEditSortState = null;
+      }
     }
     this.editingReviewElement = null;
   }
