@@ -20,8 +20,13 @@ import { MatExpansionModule } from '@angular/material/expansion';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import * as XLSX from 'xlsx';
 import { FirestoreService } from './firestore.service';
+import { SkillsService } from './services/skills.service';
+import { RiskService } from './services/risk.service';
+import { InvestigationSkill } from './config/skills.config';
+import { REGION_OPTIONS, buildCountryToRegionMap, normalizeCountryName, getRegionByCountry } from './config/countries.config';
 
 export interface ApplicantRecord {
+  id?: string;
   applicant: string;
   acronym: string;
   entityType: string;
@@ -44,6 +49,9 @@ export interface ApplicantRecord {
   escalationRequired?: string;
   hatyjaComments?: string;
   emailCommunications?: string;
+  // DRMC/Compliance QA columns
+  drmcCompliance1?: string;
+  drmcCompliance2?: string;
   // Risk analysis
   riskPercent?: number | null;
   riskReasons?: string;
@@ -118,35 +126,17 @@ export class AppComponent implements AfterViewInit {
   readonly statusOptions: string[] = ['All', 'Pending', 'Passed', 'Failed', 'Invited'];
   private readonly validPassedValues = new Set(['Pending', 'Passed', 'Failed', 'Invited']);
 
-  // --- Risk Investigation Skills (extensible list) ---
-  private readonly SKILLS_STORAGE = 'gfc_investigation_skills';
-  private readonly defaultSkills: { id: string; label: string; prompt: string }[] = [
-    {
-      id: 'webpage_check',
-      label: 'Website Reliability',
-      prompt: 'Visit or research the official website of the organization. Evaluate if the website looks professional, is well-maintained, has been active for several years, and contains verifiable contact information. If the website looks newly created, poorly designed, or lacks transparency, flag it as higher risk. Also check if the organization\'s portfolio, projects, or mission are related to climate change, environmental sustainability, or green development. If none of their work is climate-related, flag this as a negative finding.'
-    },
-    {
-      id: 'corruption_news',
-      label: 'Corruption & Legal Issues',
-      prompt: 'Search for any news articles, legal cases, or reports in the last 5 years involving this organization in corruption, fraud, money laundering, sanctions violations, or any other financial crime. Include specific sources and dates if found.'
-    },
-    {
-      id: 'dj_riskcenter',
-      label: 'Dow Jones RiskCenter',
-      prompt: 'Check if the organization or its key executives appear in Dow Jones RiskCenter databases, including sanctions lists, watchlists, Politically Exposed Persons (PEP) lists, adverse media, or state-owned enterprise flags. Report any matches found and their risk categories.'
-    },
-    {
-      id: 'sanctions_check',
-      label: 'Sanctions Screening (UN/US/EU)',
-      prompt: 'Confirm that all relevant parties are not listed under UN Security Council financial sanctions. Verify that the applicant entity and any applicable beneficial owners or controllers are not subject to sanctions under UN, US (OFAC), or EU regimes. Report any matches or close associations found.'
-    }
-  ];
-  investigationSkills: { id: string; label: string; prompt: string }[] = [];
+  // --- Risk Investigation Skills ---
+  investigationSkills: InvestigationSkill[] = [];
 
   // Gemini API configuration
   private geminiApiKey: string = '';
   private readonly GEMINI_KEY_STORAGE = 'gfc_gemini_api_key';
+
+  // ID generation helper
+  private generateApplicantId(): string {
+    return 'app_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+  }
   statusOptionsWithCount: { value: string; label: string }[] = [];
   readonly entityTypeOptions: string[] = [
     'All',
@@ -158,60 +148,9 @@ export class AppComponent implements AfterViewInit {
     'Unknown'
   ];
   entityTypeOptionsWithCount: { value: string; label: string }[] = [];
-  readonly regionOptions: string[] = [
-    'All',
-    'DAFR',
-    'DAPAC',
-    'DECM',
-    'DLAC',
-    'INTERNATIONAL'
-  ];
+  readonly regionOptions: string[] = [...REGION_OPTIONS];
   regionOptionsWithCount: { value: string; label: string }[] = [];
-  private readonly regionCountryMap: Record<string, Set<string>> = {
-    DAPAC: new Set([
-      'afghanistan', 'bangladesh', 'bhutan', 'china', 'hong kong', 'india', 'japan', 'kazakhstan',
-      'kyrgyzstan', 'laos', 'macau', 'maldives', 'mongolia', 'nepal', 'north korea', 'pakistan',
-      'south korea', 'sri lanka', 'taiwan', 'tajikistan', 'turkmenistan', 'uzbekistan', 'vietnam',
-      'viet nam',
-      "lao people's democratic", "lao people's democratic republic", "lao people's democratic republic (the)", 'lao pdr',
-      'fiji', 'kiribati', 'marshall islands', 'micronesia', 'nauru', 'palau', 'papua new guinea',
-      'samoa', 'solomon islands', 'timor leste', 'timor-leste', 'tonga', 'tuvalu', 'vanuatu'
-      , 'brunei', 'cambodia', 'indonesia', 'malaysia', 'myanmar', 'philippines', 'singapore',
-      'thailand'
-    ]),
-    DAFR: new Set([
-      'algeria', 'benin', 'burkina faso', 'cabo verde', 'cape verde', 'cameroon',
-      'central african republic', 'chad', 'congo', 'democratic republic of the congo',
-      'egypt', 'equatorial guinea', 'gabon', 'gambia', 'ghana', 'guinea', 'guinea-bissau',
-      'ivory coast', 'cote d ivoire', "cote d'ivoire", 'liberia', 'libya', 'mali', 'mauritania',
-      'morocco', 'niger', 'nigeria', 'senegal', 'sierra leone', 'sudan', 'togo', 'tunisia',
-      'angola', 'botswana', 'burundi', 'comoros', 'djibouti', 'eritrea', 'eswatini', 'swaziland',
-      'ethiopia', 'kenya', 'lesotho', 'madagascar', 'malawi', 'mauritius', 'mozambique',
-      'namibia', 'rwanda', 'seychelles', 'somalia', 'south africa', 'south sudan', 'tanzania',
-      'uganda', 'zambia', 'zimbabwe'
-    ]),
-    DECM: new Set([
-      'albania', 'andorra', 'armenia', 'austria', 'azerbaijan', 'belarus', 'belgium',
-      'bosnia and herzegovina', 'bulgaria', 'croatia', 'cyprus', 'czech republic', 'czechia',
-      'denmark', 'estonia', 'finland', 'france', 'georgia', 'germany', 'greece', 'hungary',
-      'iceland', 'ireland', 'italy', 'kosovo', 'latvia', 'liechtenstein', 'lithuania',
-      'luxembourg', 'malta', 'moldova', 'monaco', 'montenegro', 'netherlands', 'netherlands (the)',
-      'north macedonia', 'norway', 'poland', 'portugal', 'romania', 'russia', 'san marino',
-      'serbia', 'slovakia', 'slovenia', 'spain', 'sweden', 'switzerland', 'uk', 'united kingdom',
-      'ukraine', 'vatican city',
-      'bahrain', 'iraq', 'israel', 'jordan', 'kuwait', 'lebanon', 'oman', 'palestine', 'qatar',
-      'saudi arabia', 'syria', 'turkey', 'united arab emirates', 'uae', 'yemen', 'iran'
-    ]),
-    DLAC: new Set([
-      'antigua and barbuda', 'bahamas', 'barbados', 'belize', 'dominica', 'grenada', 'guyana',
-      'haiti', 'jamaica', 'saint kitts and nevis', 'saint lucia', 'saint vincent and the grenadines',
-      'suriname', 'trinidad and tobago',
-      'argentina', 'bolivia', 'brazil', 'chile', 'colombia', 'costa rica', 'cuba',
-      'dominican republic', 'ecuador', 'el salvador', 'guatemala', 'honduras', 'mexico',
-      'nicaragua', 'panama', 'paraguay', 'peru', 'uruguay', 'venezuela'
-    ])
-  };
-  private readonly countryToRegionMap = new Map<string, string>();
+  private readonly countryToRegionMap = buildCountryToRegionMap();
 
   @ViewChild(MatPaginator) paginator!: MatPaginator;
   @ViewChild(MatSort) sort!: MatSort;
@@ -293,8 +232,12 @@ export class AppComponent implements AfterViewInit {
       .slice(0, 5);
   }
 
-  constructor(private ngZone: NgZone, private firestoreService: FirestoreService) {
-    this.buildCountryToRegionMap();
+  constructor(
+    private ngZone: NgZone,
+    private firestoreService: FirestoreService,
+    private skillsService: SkillsService,
+    private riskService: RiskService
+  ) {
     this.syncSelectedKeys();
     this.updateDisplayedColumns();
     this.deferFilterCountRefresh();
@@ -430,29 +373,50 @@ export class AppComponent implements AfterViewInit {
   }
 
   private readonly LOCAL_TIMESTAMP_KEY = 'gfc_data_updated_at';
+  private unsubscribeFromApplicants: (() => void) | null = null;
 
   private async loadFromFirestore() {
-    const result = await this.firestoreService.loadRecords();
-    if (!result || result.records.length === 0) return;
-
-    const localTimestamp = localStorage.getItem(this.LOCAL_TIMESTAMP_KEY) || '';
-    const cloudTimestamp = result.updatedAt || '';
-
-    if (localTimestamp && localTimestamp > cloudTimestamp) {
-      // Local is newer (offline edits) → push to Firestore
-      console.log('Local data is newer than cloud — syncing up.');
-      this.saveToFirestore(this.dataSource.data);
-      return;
+    // First, try to migrate from legacy format (single document with array)
+    const migrated = await this.firestoreService.migrateFromLegacy(() => this.generateApplicantId());
+    if (migrated > 0) {
+      this.showToast(`Migrated ${migrated} records to new format.`, 'success');
     }
 
-    // Cloud is newer or equal → use cloud data
-    this.hydrateRecords(result.records);
-    this.ngZone.run(() => {
-      this.dataSource.data = result.records;
-      this.deferFilterCountRefresh();
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(result.records));
-      localStorage.setItem(this.LOCAL_TIMESTAMP_KEY, cloudTimestamp);
-      this.showToast(`${result.records.length} records synced from cloud.`, 'success');
+    // Load all applicants from Firestore
+    const applicants = await this.firestoreService.loadAllApplicants();
+
+    if (applicants.length > 0) {
+      this.hydrateRecords(applicants);
+      this.ngZone.run(() => {
+        this.dataSource.data = applicants;
+        this.deferFilterCountRefresh();
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(applicants));
+        this.showToast(`${applicants.length} records synced from cloud.`, 'success');
+      });
+    }
+
+    // Subscribe to real-time updates
+    this.setupRealtimeSubscription();
+  }
+
+  private setupRealtimeSubscription() {
+    // Unsubscribe from previous subscription if exists
+    if (this.unsubscribeFromApplicants) {
+      this.unsubscribeFromApplicants();
+    }
+
+    this.unsubscribeFromApplicants = this.firestoreService.subscribeToApplicants((applicants) => {
+      // Ensure all have IDs
+      applicants.forEach(a => {
+        if (!a.id) a.id = this.generateApplicantId();
+      });
+
+      this.hydrateRecords(applicants);
+      this.ngZone.run(() => {
+        this.dataSource.data = applicants;
+        this.deferFilterCountRefresh();
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(applicants));
+      });
     });
   }
 
@@ -570,9 +534,9 @@ export class AppComponent implements AfterViewInit {
       this.editingReviewElement.isEditingHatyjaComments = false;
       this.editingReviewElement.isEditingEmailCommunications = false;
       this.editingReviewElement.isEditingRiskReasons = false;
+      this.saveToStorage(this.editingReviewElement);
     }
     this.editingReviewElement = null;
-    this.saveToStorage();
   }
 
   applyFilter(event: Event) {
@@ -621,25 +585,12 @@ export class AppComponent implements AfterViewInit {
   }
 
   private getRegionByCountry(country?: string): string {
-    const normalized = this.normalizeCountryName(country);
-    if (!normalized) return 'INTERNATIONAL';
-    return this.countryToRegionMap.get(normalized) || 'INTERNATIONAL';
+    return getRegionByCountry(country || '', this.countryToRegionMap);
   }
 
   private matchesRegionSelection(rowRegion: string, selectedRegion?: string): boolean {
     if (!selectedRegion || selectedRegion === 'All') return true;
-    if (rowRegion === selectedRegion) return true;
-    return false;
-  }
-
-  private normalizeCountryName(country?: string): string {
-    if (!country) return '';
-    return country
-      .toLowerCase()
-      .trim()
-      .replace(/\(the\)/g, '')
-      .replace(/[.,]/g, '')
-      .replace(/\s+/g, ' ');
+    return rowRegion === selectedRegion;
   }
 
   private getRegionCounts(): Record<string, number> {
@@ -653,15 +604,6 @@ export class AppComponent implements AfterViewInit {
     });
 
     return counts;
-  }
-
-  private buildCountryToRegionMap() {
-    this.countryToRegionMap.clear();
-    Object.entries(this.regionCountryMap).forEach(([region, countries]) => {
-      countries.forEach(country => {
-        this.countryToRegionMap.set(this.normalizeCountryName(country), region);
-      });
-    });
   }
 
   private refreshRegionOptionsWithCount() {
@@ -759,29 +701,56 @@ export class AppComponent implements AfterViewInit {
   dismissToast() { this.toast.visible = false; }
   // ────────────────────────────────────────────────────────────────
 
-  clearData() {
+  async clearData() {
     localStorage.removeItem(STORAGE_KEY);
+    // Delete all from Firestore
+    await this.firestoreService.clearAllApplicants();
     this.dataSource.data = [];
     this.deferFilterCountRefresh();
-    this.firestoreService.clearRecords();
     this.showToast('All data cleared.', 'info');
   }
 
   private firestoreSaveTimeout: any = null;
+  private pendingApplicantSave: ApplicantRecord | null = null;
 
-  saveToStorage() {
+  saveToStorage(specificApplicant?: ApplicantRecord) {
     const data = this.dataSource.data;
     const now = new Date().toISOString();
     // Instant local cache + timestamp
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     localStorage.setItem(this.LOCAL_TIMESTAMP_KEY, now);
-    // Debounced cloud save (1s delay to batch rapid edits)
-    clearTimeout(this.firestoreSaveTimeout);
-    this.firestoreSaveTimeout = setTimeout(() => this.saveToFirestore(data), 1000);
+
+    if (specificApplicant?.id) {
+      // Save specific applicant individually
+      this.pendingApplicantSave = specificApplicant;
+      clearTimeout(this.firestoreSaveTimeout);
+      this.firestoreSaveTimeout = setTimeout(() => this.savePendingApplicant(), 500);
+    }
   }
 
-  private async saveToFirestore(data: ApplicantRecord[]) {
-    await this.firestoreService.saveRecords(data);
+  private async savePendingApplicant() {
+    if (!this.pendingApplicantSave?.id) return;
+    try {
+      const { id, ...dataWithoutId } = this.pendingApplicantSave;
+      await this.firestoreService.saveApplicant(id, dataWithoutId);
+      console.log('Firestore: saved applicant', id);
+    } catch (err) {
+      console.error('Firestore: save applicant failed', err);
+    }
+    this.pendingApplicantSave = null;
+  }
+
+  async saveApplicantImmediate(applicant: ApplicantRecord) {
+    if (!applicant.id) {
+      applicant.id = this.generateApplicantId();
+    }
+    try {
+      const { id, ...dataWithoutId } = applicant;
+      await this.firestoreService.saveApplicant(id, dataWithoutId);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.dataSource.data));
+    } catch (err) {
+      console.error('Firestore: immediate save failed', err);
+    }
   }
 
   saveColumnVisibility() {
@@ -793,6 +762,9 @@ export class AppComponent implements AfterViewInit {
   columnVisibility = {
     applicant: true,
     acronym: true,
+    passed: true,
+    drmcCompliance1: true,
+    drmcCompliance2: true,
     entityType: true,
     submittedAt: true,
     preScreening: true,
@@ -802,7 +774,6 @@ export class AppComponent implements AfterViewInit {
     nolStatus: true,
     hatyjaReviewComments: true,
     redFlags: true,
-    passed: true,
     djResult: true,
     djReportNumber: true,
     djReportLink: true,
@@ -844,15 +815,18 @@ export class AppComponent implements AfterViewInit {
 
   // Helper arrays for UI presentation
   columnKeys = [
-    'applicant', 'acronym', 'entityType',
+    'applicant', 'acronym', 'passed', 'entityType',
     'submittedAt', 'preScreening', 'profiles',
-    'country', 'address', 'nolStatus', 'hatyjaReviewComments', 'emailCommunications', 'redFlags', 'passed',
+    'country', 'address', 'nolStatus', 'hatyjaReviewComments', 'emailCommunications', 'redFlags',
     'djResult', 'djReportNumber', 'djReportLink', 'djTruePositive', 'djFalsePositive', 'escalationRequired', 'hatyjaComments',
-    'riskPercent', 'riskReasons'
+    'drmcCompliance1', 'drmcCompliance2', 'riskPercent', 'riskReasons'
   ];
   columnNames: { [key: string]: string } = {
     applicant: 'Applicant',
     acronym: 'Acronym',
+    passed: 'Status',
+    drmcCompliance1: 'DRMC/Compliance 1',
+    drmcCompliance2: 'DRMC/Compliance 2',
     entityType: 'Entity Type',
     submittedAt: 'Submitted At',
     preScreening: 'Pre-Screening',
@@ -862,7 +836,6 @@ export class AppComponent implements AfterViewInit {
     nolStatus: 'NL Status',
     hatyjaReviewComments: 'Hatyja Review comments',
     redFlags: 'Red Flags',
-    passed: 'Status',
     djResult: 'DJ-Result',
     djReportNumber: 'DJ report number',
     djReportLink: 'DJ report link',
@@ -888,16 +861,23 @@ export class AppComponent implements AfterViewInit {
       this.dataSource.data.forEach(row => this.selection.select(row));
   }
 
-  deleteSelectedRows() {
+  async deleteSelectedRows() {
     const selected = this.selection.selected;
     if (selected.length === 0) return;
+
+    // Delete from Firestore individually
+    for (const row of selected) {
+      if (row.id) {
+        await this.firestoreService.deleteApplicant(row.id);
+      }
+    }
 
     const data = this.dataSource.data;
     const newData = data.filter(row => !this.selection.isSelected(row));
     this.dataSource.data = newData;
     this.deferFilterCountRefresh();
     this.selection.clear();
-    this.saveToStorage();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(newData));
     this.showToast(`${selected.length} records deleted.`, 'info');
   }
 
@@ -963,7 +943,7 @@ export class AppComponent implements AfterViewInit {
     });
   }
 
-  importExcel(event: any): void {
+  async importExcel(event: any): Promise<void> {
     const target: DataTransfer = <DataTransfer>(event.target);
     if (target.files.length !== 1) {
       this.showToast('Please select a single file.', 'error');
@@ -971,7 +951,7 @@ export class AppComponent implements AfterViewInit {
     }
     this.showToast('Importing data…', 'info');
     const reader: FileReader = new FileReader();
-    reader.onload = (e: any) => {
+    reader.onload = async (e: any) => {
       const dataBuffer = e.target.result;
       const wb: XLSX.WorkBook = XLSX.read(dataBuffer, {
         type: 'array',
@@ -1001,6 +981,7 @@ export class AppComponent implements AfterViewInit {
         let idxApp = -1, idxAcronym = -1, idxType = -1, idxCountry = -1, idxAddress = -1, idxNol = -1, idxReview = -1, idxFlags = -1, idxPassed = -1;
         let idxSubmitted = -1, idxPreScreen = -1, idxProfiles = -1;
         let idxDjResult = -1, idxDjNumber = -1, idxDjLink = -1, idxDjTrue = -1, idxDjFalse = -1, idxEscalation = -1, idxHatyjaExtra = -1, idxEmailComm = -1;
+        let idxDrmc1 = -1, idxDrmc2 = -1;
         let foundHeaders = false;
 
         for (let i = 0; i < importedData.length && i < 10; i++) {
@@ -1011,6 +992,7 @@ export class AppComponent implements AfterViewInit {
           let tempIdxApp = -1, tempIdxAcronym = -1, tempIdxType = -1, tempIdxCountry = -1, tempIdxAddress = -1, tempIdxNol = -1, tempIdxReview = -1, tempIdxFlags = -1, tempIdxPassed = -1;
           let tempIdxSub = -1, tempIdxPre = -1, tempIdxProf = -1;
           let tempIdxDjRes = -1, tempIdxDjNum = -1, tempIdxDjLnk = -1, tempIdxDjT = -1, tempIdxDjF = -1, tempIdxEsc = -1, tempIdxHatX = -1, tempIdxEmailComm = -1;
+          let tempIdxDrmc1 = -1, tempIdxDrmc2 = -1;
 
           const headerCells = row.map((c: any, idx: number) => `[${idx}]="${c}"`).join(', ');
           console.log('Row', i, 'headers:', headerCells);
@@ -1041,6 +1023,8 @@ export class AppComponent implements AfterViewInit {
             else if (colName.includes('escalation')) { tempIdxEsc = index; matches++; }
             else if (colName.includes('email') && colName.includes('comm')) { tempIdxEmailComm = index; matches++; }
             else if (colName.includes('comments') && (colName.includes('hatyja') || colName.includes('extra'))) { tempIdxHatX = index; matches++; }
+            else if ((colName.includes('drmc') || colName.includes('compliance')) && (colName.includes('qa-1') || colName.includes('qa 1') || colName.includes('1') || colName.includes('meixi'))) { tempIdxDrmc1 = index; matches++; }
+            else if ((colName.includes('drmc') || colName.includes('compliance')) && (colName.includes('qa-2') || colName.includes('qa 2') || colName.includes('2'))) { tempIdxDrmc2 = index; matches++; }
           });
 
           if (matches >= 2) {
@@ -1069,6 +1053,8 @@ export class AppComponent implements AfterViewInit {
             idxEscalation = tempIdxEsc;
             idxHatyjaExtra = tempIdxHatX;
             idxEmailComm = tempIdxEmailComm;
+            idxDrmc1 = tempIdxDrmc1;
+            idxDrmc2 = tempIdxDrmc2;
             headerRowIndex = i;
             foundHeaders = true;
             console.log('Detected headers at row', i, { idxApp, idxCountry, idxSubmitted, idxNol });
@@ -1137,7 +1123,9 @@ export class AppComponent implements AfterViewInit {
             })(),
             escalationRequired: cellStr(idxEscalation, row),
             hatyjaComments: cellStr(idxHatyjaExtra, row),
-            emailCommunications: cellStr(idxEmailComm, row)
+            emailCommunications: cellStr(idxEmailComm, row),
+            drmcCompliance1: cellStr(idxDrmc1, row),
+            drmcCompliance2: cellStr(idxDrmc2, row)
           };
 
           const applicantKey = (importedRow.applicant || '').toLowerCase();
@@ -1151,7 +1139,8 @@ export class AppComponent implements AfterViewInit {
               'hatyjaReviewComments', 'emailCommunications', 'redFlags', 'passed',
               'submittedAt', 'preScreening', 'profiles',
               'djResult', 'djReportNumber', 'djReportLink',
-              'djTruePositive', 'djFalsePositive', 'escalationRequired', 'hatyjaComments'
+              'djTruePositive', 'djFalsePositive', 'escalationRequired', 'hatyjaComments',
+              'drmcCompliance1', 'drmcCompliance2'
             ];
             for (const field of mergeFields) {
               const existingVal = (existing as any)[field];
@@ -1167,6 +1156,7 @@ export class AppComponent implements AfterViewInit {
           } else {
             // New applicant: create a full record
             const newRec: ApplicantRecord = {
+              id: this.generateApplicantId(),
               applicant: importedRow.applicant || '',
               acronym: importedRow.acronym || '',
               entityType: importedRow.entityType || '',
@@ -1186,7 +1176,9 @@ export class AppComponent implements AfterViewInit {
               djFalsePositive: importedRow.djFalsePositive || '',
               escalationRequired: importedRow.escalationRequired || '',
               hatyjaComments: importedRow.hatyjaComments || '',
-              emailCommunications: importedRow.emailCommunications || ''
+              emailCommunications: importedRow.emailCommunications || '',
+              drmcCompliance1: importedRow.drmcCompliance1 || '',
+              drmcCompliance2: importedRow.drmcCompliance2 || ''
             };
             existingData.push(newRec);
             existingMap.set(applicantKey, newRec);
@@ -1198,6 +1190,13 @@ export class AppComponent implements AfterViewInit {
       this.dataSource.data = existingData;
       this.deferFilterCountRefresh();
       localStorage.setItem(STORAGE_KEY, JSON.stringify(existingData));
+
+      // Save all applicants to Firestore individually
+      for (const applicant of existingData) {
+        if (!applicant.id) applicant.id = this.generateApplicantId();
+        await this.saveApplicantImmediate(applicant);
+      }
+
       console.log('Final Records Sample:', existingData[0]);
       if (this.paginator) {
         this.paginator.firstPage();
@@ -1211,7 +1210,7 @@ export class AppComponent implements AfterViewInit {
     reader.readAsArrayBuffer(target.files[0]);
   }
 
-  importExcel2(event: any): void {
+  async importExcel2(event: any): Promise<void> {
     const target: DataTransfer = <DataTransfer>(event.target);
     if (target.files.length !== 1) {
       this.showToast('Please select a single file.', 'error');
@@ -1219,7 +1218,7 @@ export class AppComponent implements AfterViewInit {
     }
     this.showToast('Importing data (Excel 2)…', 'info');
     const reader: FileReader = new FileReader();
-    reader.onload = (e: any) => {
+    reader.onload = async (e: any) => {
       const dataBuffer = e.target.result;
       const wb: XLSX.WorkBook = XLSX.read(dataBuffer, {
         type: 'array',
@@ -1241,6 +1240,15 @@ export class AppComponent implements AfterViewInit {
       for (const [key, displayName] of Object.entries(this.columnNames)) {
         nameToKey.set(String(displayName).toLowerCase().trim(), key);
       }
+
+      // Add aliases for Excel column names that differ from display names
+      nameToKey.set('drmc/compliance qa-1 (meixi)', 'drmcCompliance1');
+      nameToKey.set('drmc/compliance qa-1', 'drmcCompliance1');
+      nameToKey.set('drmc/compliance qa 1', 'drmcCompliance1');
+      nameToKey.set('drmc/compliance qa-2', 'drmcCompliance2');
+      nameToKey.set('drmc/compliance qa 2', 'drmcCompliance2');
+      nameToKey.set('compliance qa-1 (meixi)', 'drmcCompliance1');
+      nameToKey.set('compliance qa-2', 'drmcCompliance2');
 
       // --- Detect header row (first 10 rows) and map column indices to field keys ---
       let headerRowIndex = -1;
@@ -1337,7 +1345,7 @@ export class AppComponent implements AfterViewInit {
             matchCount++;
           } else {
             // New applicant
-            const newRec: ApplicantRecord = { applicant: applicantName } as ApplicantRecord;
+            const newRec: ApplicantRecord = { id: this.generateApplicantId(), applicant: applicantName } as ApplicantRecord;
             for (const mapping of colMap) {
               if (mapping.key === 'applicant') continue;
               const val = this.importExcel2CellValue(mapping.key, mapping.idx, row, cellStr);
@@ -1358,6 +1366,13 @@ export class AppComponent implements AfterViewInit {
       this.dataSource.data = existingData;
       this.deferFilterCountRefresh();
       localStorage.setItem(STORAGE_KEY, JSON.stringify(existingData));
+
+      // Save all applicants to Firestore individually
+      for (const applicant of existingData) {
+        if (!applicant.id) applicant.id = this.generateApplicantId();
+        await this.saveApplicantImmediate(applicant);
+      }
+
       if (this.paginator) this.paginator.firstPage();
 
       // Show summary toast
@@ -1403,46 +1418,31 @@ export class AppComponent implements AfterViewInit {
   }
 
   // --- Investigation Skills Management ---
-  private loadSkills(): void {
-    const stored = localStorage.getItem(this.SKILLS_STORAGE);
-    if (stored) {
-      try {
-        this.investigationSkills = JSON.parse(stored);
-      } catch {
-        this.investigationSkills = [...this.defaultSkills];
-      }
-    } else {
-      this.investigationSkills = [...this.defaultSkills];
-    }
-    // Async load from Firestore
-    this.firestoreService.loadSkills().then(skills => {
-      if (skills) {
-        this.ngZone.run(() => {
-          this.investigationSkills = skills;
-          localStorage.setItem(this.SKILLS_STORAGE, JSON.stringify(skills));
-        });
-      }
-    });
+  private async loadSkills(): Promise<void> {
+    this.investigationSkills = await this.skillsService.loadSkills();
   }
 
   saveSkills(): void {
-    localStorage.setItem(this.SKILLS_STORAGE, JSON.stringify(this.investigationSkills));
-    this.firestoreService.saveSkills(this.investigationSkills);
+    this.skillsService.saveSkills(this.investigationSkills);
     this.showToast('Investigation skills saved.', 'success');
   }
 
   addSkill(): void {
-    const newId = 'skill_' + Date.now();
-    this.investigationSkills.push({ id: newId, label: 'New Skill', prompt: '' });
+    this.skillsService.addSkill();
+    this.investigationSkills = this.skillsService.getSkills();
   }
 
   removeSkill(index: number): void {
-    this.investigationSkills.splice(index, 1);
-    this.saveSkills();
+    const skill = this.investigationSkills[index];
+    if (skill) {
+      this.skillsService.removeSkill(skill.id);
+      this.investigationSkills = this.skillsService.getSkills();
+      this.saveSkills();
+    }
   }
 
   resetSkills(): void {
-    this.investigationSkills = [...this.defaultSkills];
+    this.investigationSkills = this.skillsService.resetToDefaults();
     this.saveSkills();
   }
 
@@ -1457,6 +1457,7 @@ export class AppComponent implements AfterViewInit {
   }
 
   async calculateRisk(element: ApplicantRecord): Promise<void> {
+    // Ensure API key is set
     if (!this.geminiApiKey) {
       const key = this.promptForGeminiKey();
       if (!key || !key.trim()) {
@@ -1465,132 +1466,52 @@ export class AppComponent implements AfterViewInit {
       }
     }
 
+    // Update RiskService with current API key
+    this.riskService.setApiKey(this.geminiApiKey);
+
+    // Ask for corrections when recalculating (existing riskPercent)
+    let userCorrection = '';
+    if (element.riskPercent != null) {
+      userCorrection = window.prompt(
+        `Recalculating risk for "${element.applicant}".\n\nCurrent risk: ${element.riskPercent}%\n\n` +
+        `If you want to help guide the analysis, enter corrections or additional context below:\n` +
+        `(e.g., "website is actually example.org not example.com", "ignore results from 2015")\n\n` +
+        `Leave empty to recalculate without changes:`,
+        ''
+      ) || '';
+    }
+
     element.isCalculatingRisk = true;
 
-    const skillPrompts = this.investigationSkills.map(s => `### ${s.label}\n${s.prompt}`).join('\n\n');
-
-    const systemPrompt = `You are a risk analysis expert for the Green Climate Fund. Your task is to evaluate the risk of granting accreditation to an organization. You must be thorough, factual, and cite sources when possible.
-
-Analyze the following organization and assign a RISK PERCENTAGE from 0 to 100, where:
-- 0-20: Very low risk (well-established, reputable, no issues found)
-- 21-40: Low risk (generally reputable, minor concerns)
-- 41-60: Medium risk (some concerns found, needs further review)
-- 61-80: High risk (significant concerns, corruption cases, or unreliable presence)
-- 81-100: Very high risk (major red flags, active legal issues, fraud)
-
-Organization details:
-- Name: ${element.applicant}
-- Acronym: ${element.acronym || 'N/A'}
-- Entity Type: ${element.entityType || 'N/A'}
-- Country: ${element.country || 'N/A'}
-- Address: ${element.address || 'N/A'}
-
-Investigation criteria to evaluate:
-${skillPrompts}
-
-IMPORTANT: You MUST respond ONLY with a valid JSON object in the following format, no markdown, no code fences, just raw JSON.
-Each reason MUST start with [+] for positive findings (low risk indicators) or [-] for negative findings (risk indicators):
-{
-  "riskPercent": <number 0-100>,
-  "reasons": [
-    "[+] <positive finding with source URL if available>",
-    "[-] <negative finding with source URL if available>"
-  ]
-}`;
-
     try {
-      const models = ['gemini-2.5-flash', 'gemini-2.5-pro'];
-      const maxRetriesPerModel = 4;
-      let response: Response | null = null;
-      let usedModel = '';
-
-      for (const model of models) {
-        let success = false;
-        for (let attempt = 0; attempt <= maxRetriesPerModel; attempt++) {
-          response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${this.geminiApiKey}`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                contents: [{ parts: [{ text: systemPrompt }] }],
-                generationConfig: {
-                  temperature: 0.2,
-                  maxOutputTokens: 16384
-                }
-              })
-            }
-          );
-
-          if ((response.status === 429 || response.status === 503) && attempt < maxRetriesPerModel) {
-            const baseWait = response.status === 503 ? 5 : 2;
-            const waitSec = baseWait * (attempt + 1);
-            const reason = response.status === 429 ? 'Rate limited' : 'Service busy';
-            console.warn(`${model} ${response.status} — retrying in ${waitSec}s (attempt ${attempt + 1}/${maxRetriesPerModel})`);
-            this.showToast(`${reason} (${model}). Retrying in ${waitSec}s…`, 'info');
-            await new Promise(r => setTimeout(r, waitSec * 1000));
-            continue;
-          }
-          if (response.ok) {
-            usedModel = model;
-            success = true;
-          }
-          break;
-        }
-        if (success) break;
-        if (response && (response.status === 404 || response.status === 429 || response.status === 503)) {
-          console.warn(`Model ${model} failed (${response.status}), trying next model…`);
-          this.showToast(`${model} unavailable, trying next model…`, 'info');
-          continue;
-        }
-        break;
-      }
-      if (usedModel) console.log(`Risk calculated using model: ${usedModel}`);
-
-      if (!response || !response.ok) {
-        const errBody = response ? await response.text() : 'No response';
-        const status = response?.status || 0;
-        console.error('Gemini API error:', status, errBody);
-        if (status === 401 || status === 403) {
-          this.geminiApiKey = '';
-          localStorage.removeItem(this.GEMINI_KEY_STORAGE);
-          this.showToast('Invalid API key. Please try again.', 'error');
-        } else if (status === 429) {
-          this.showToast('Rate limit exceeded. Please wait a moment and try again.', 'error');
-        } else {
-          this.showToast(`Gemini API error: ${status}`, 'error');
-        }
-        element.isCalculatingRisk = false;
-        return;
-      }
-
-      const data = await response.json();
-      console.log('Gemini full response:', JSON.stringify(data).substring(0, 500));
-
-      // Extract text from all parts (gemini-2.5-pro may include thinking parts)
-      const parts = data?.candidates?.[0]?.content?.parts || [];
-      const text = parts.map((p: any) => p.text || '').join('').trim();
-      console.log('Gemini extracted text:', text);
-
-      if (!text) {
-        throw new Error('Gemini returned an empty response. Please try again.');
-      }
-
-      // Parse JSON from response (handle possible code fences)
-      const jsonStr = text.replace(/```json\s*/g, '').replace(/```/g, '').trim();
-      const parsed = JSON.parse(jsonStr);
+      const result = await this.riskService.calculateRisk(
+        element,
+        this.investigationSkills,
+        userCorrection || undefined
+      );
 
       this.ngZone.run(() => {
-        element.riskPercent = Math.max(0, Math.min(100, Math.round(parsed.riskPercent)));
-        element.riskReasons = Array.isArray(parsed.reasons) ? parsed.reasons.join('\n') : String(parsed.reasons || '');
+        element.riskPercent = result.riskPercent;
+        element.riskReasons = result.riskReasons;
         element.isCalculatingRisk = false;
-        this.saveToStorage();
+        this.saveToStorage(element);
         this.showToast(`Risk calculated for ${element.applicant}: ${element.riskPercent}%`, 'success');
       });
     } catch (err: any) {
       console.error('Risk calculation error:', err);
-      this.ngZone.run(() => {
+
+      // Handle specific error cases
+      if (err.message?.includes('401') || err.message?.includes('403')) {
+        this.geminiApiKey = '';
+        localStorage.removeItem(this.GEMINI_KEY_STORAGE);
+        this.showToast('Invalid API key. Please try again.', 'error');
+      } else if (err.message?.includes('429')) {
+        this.showToast('Rate limit exceeded. Please wait a moment and try again.', 'error');
+      } else {
         this.showToast(`Error calculating risk: ${err.message || err}`, 'error');
+      }
+
+      this.ngZone.run(() => {
         element.isCalculatingRisk = false;
       });
     }

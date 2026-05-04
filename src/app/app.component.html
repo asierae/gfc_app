@@ -371,6 +371,25 @@
           </td>
         </ng-container>
 
+        <!-- Status Column -->
+        <ng-container matColumnDef="passed">
+          <th mat-header-cell *matHeaderCellDef mat-sort-header [hidden]="!columnVisibility.passed">
+            Status
+            <div #resizerPas class="custom-resizer" (mousedown)="initResize($event, resizerPas)"></div>
+          </th>
+          <td mat-cell *matCellDef="let element" [hidden]="!columnVisibility.passed">
+            <select [(ngModel)]="element.passed" class="editable-cell status-input"
+              [ngClass]="{'status-passed-cell': element.passed === 'Passed', 'status-failed-cell': element.passed === 'Failed', 'status-invited-cell': element.passed === 'Invited', 'status-pending-cell': element.passed === 'Pending'}"
+              (change)="saveToStorage(element)">
+              <option value="" style="background-color: white; color: black;"></option>
+              <option value="Pending" style="background-color: #fef3c7; color: #b45309; font-weight: 600;">Pending</option>
+              <option value="Passed" style="background-color: #dcfce7; color: #15803d; font-weight: 600;">Passed</option>
+              <option value="Failed" style="background-color: #fee2e2; color: #b91c1c; font-weight: 600;">Failed</option>
+              <option value="Invited" style="background-color: #dbeafe; color: #1e40af; font-weight: 600;">Invited</option>
+            </select>
+          </td>
+        </ng-container>
+
         <!-- Entity Type Column -->
         <ng-container matColumnDef="entityType">
           <th mat-header-cell *matHeaderCellDef mat-sort-header [hidden]="!columnVisibility.entityType">
@@ -532,25 +551,6 @@
           </td>
         </ng-container>
 
-        <!-- Status Column -->
-        <ng-container matColumnDef="passed">
-          <th mat-header-cell *matHeaderCellDef mat-sort-header [hidden]="!columnVisibility.passed">
-            Status
-            <div #resizerPas class="custom-resizer" (mousedown)="initResize($event, resizerPas)"></div>
-          </th>
-          <td mat-cell *matCellDef="let element" [hidden]="!columnVisibility.passed">
-            <select [(ngModel)]="element.passed" class="editable-cell status-input"
-              [ngClass]="{'status-passed-cell': element.passed === 'Passed', 'status-failed-cell': element.passed === 'Failed', 'status-invited-cell': element.passed === 'Invited', 'status-pending-cell': element.passed === 'Pending'}"
-              (change)="saveToStorage()">
-              <option value="" style="background-color: white; color: black;"></option>
-              <option value="Pending" style="background-color: #fef3c7; color: #b45309; font-weight: 600;">Pending</option>
-              <option value="Passed" style="background-color: #dcfce7; color: #15803d; font-weight: 600;">Passed</option>
-              <option value="Failed" style="background-color: #fee2e2; color: #b91c1c; font-weight: 600;">Failed</option>
-              <option value="Invited" style="background-color: #dbeafe; color: #1e40af; font-weight: 600;">Invited</option>
-            </select>
-          </td>
-        </ng-container>
-
         <!-- DJ-Result Column -->
         <ng-container matColumnDef="djResult">
           <th mat-header-cell *matHeaderCellDef mat-sort-header [hidden]="!columnVisibility.djResult">
@@ -665,6 +665,28 @@
                 (mouseleave)="closeReviewEdit()"
                 rows="4"></textarea>
             </div>
+          </td>
+        </ng-container>
+
+        <!-- DRMC/Compliance 1 Column -->
+        <ng-container matColumnDef="drmcCompliance1">
+          <th mat-header-cell *matHeaderCellDef mat-sort-header [hidden]="!columnVisibility.drmcCompliance1">
+            DRMC/Compliance 1
+            <div #resizerDrmc1 class="custom-resizer" (mousedown)="initResize($event, resizerDrmc1)"></div>
+          </th>
+          <td mat-cell *matCellDef="let element" [hidden]="!columnVisibility.drmcCompliance1">
+            <input type="text" [(ngModel)]="element.drmcCompliance1" class="editable-cell" (blur)="saveToStorage(element)">
+          </td>
+        </ng-container>
+
+        <!-- DRMC/Compliance 2 Column -->
+        <ng-container matColumnDef="drmcCompliance2">
+          <th mat-header-cell *matHeaderCellDef mat-sort-header [hidden]="!columnVisibility.drmcCompliance2">
+            DRMC/Compliance 2
+            <div #resizerDrmc2 class="custom-resizer" (mousedown)="initResize($event, resizerDrmc2)"></div>
+          </th>
+          <td mat-cell *matCellDef="let element" [hidden]="!columnVisibility.drmcCompliance2">
+            <input type="text" [(ngModel)]="element.drmcCompliance2" class="editable-cell" (blur)="saveToStorage(element)">
           </td>
         </ng-container>
 
