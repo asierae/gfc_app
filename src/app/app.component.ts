@@ -446,15 +446,18 @@ export class AppComponent implements AfterViewInit {
   }
 
   private preEditSortState: { active: string; direction: string } | null = null;
+  private preEditDataSourceSort: MatSort | null | undefined = null;
 
   toggleReviewEdit(element: ApplicantRecord, field: 'isEditingReview' | 'isEditingHatyjaComments' | 'isEditingEmailCommunications' | 'isEditingRiskReasons', event: MouseEvent) {
     event.stopPropagation();
 
-    // Store sort state and disable sorting during edit to prevent any re-ordering
+    // Store sort state and DISABLE dataSource sort to prevent internal re-ordering
     this.preEditSortState = {
       active: this.sort.active,
       direction: this.sort.direction
     };
+    this.preEditDataSourceSort = this.dataSource.sort;
+    this.dataSource.sort = null; // CRITICAL: Prevents MatTable from re-sorting rows
 
     // First, clear any other editing states in all records to avoid multiple textareas
     this.dataSource.data.forEach(r => {
@@ -471,9 +474,6 @@ export class AppComponent implements AfterViewInit {
     else if (field === 'isEditingHatyjaComments') element.isEditingHatyjaComments = true;
     else if (field === 'isEditingEmailCommunications') element.isEditingEmailCommunications = true;
     else if (field === 'isEditingRiskReasons') element.isEditingRiskReasons = true;
-
-    // Disable sort during editing by setting direction to empty
-    this.sort.direction = '';
 
     // Capture rect NOW — event.currentTarget is lost inside setTimeout
     const triggerEl = event.currentTarget as HTMLElement;
@@ -548,11 +548,16 @@ export class AppComponent implements AfterViewInit {
 
       this.saveToStorage(this.editingReviewElement);
 
-      // Restore original sort state after editing (prevents any re-sorting)
+      // Restore dataSource sort first (prevents re-ordering when we restore MatSort state)
+      if (this.preEditDataSourceSort !== null) {
+        this.dataSource.sort = this.preEditDataSourceSort;
+        this.preEditDataSourceSort = null;
+      }
+
+      // Restore original sort state after editing
       if (this.preEditSortState) {
         this.sort.active = this.preEditSortState.active;
         this.sort.direction = this.preEditSortState.direction as any;
-        this.dataSource.sort = this.sort;
         this.preEditSortState = null;
       }
     }
