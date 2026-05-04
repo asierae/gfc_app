@@ -753,11 +753,27 @@ export class AppComponent implements AfterViewInit {
     }
   }
 
+  private normalizeApplicantForSave(applicant: ApplicantRecord): any {
+    const data: any = { ...applicant };
+    // Convert submittedAt Date to ISO string for Firestore compatibility
+    if (data.submittedAt instanceof Date) {
+      data.submittedAt = data.submittedAt.toISOString();
+    }
+    // Remove UI-only flags before saving to Firestore
+    delete data.isEditingReview;
+    delete data.isEditingHatyjaComments;
+    delete data.isEditingEmailCommunications;
+    delete data.isEditingRiskReasons;
+    delete data.isCalculatingRisk;
+    return data;
+  }
+
   private async savePendingApplicant() {
     if (!this.pendingApplicantSave?.id) return;
     try {
-      const { id, ...dataWithoutId } = this.pendingApplicantSave;
-      await this.firestoreService.saveApplicant(id, dataWithoutId);
+      const { id, ...rest } = this.pendingApplicantSave;
+      const dataToSave = this.normalizeApplicantForSave(rest as ApplicantRecord);
+      await this.firestoreService.saveApplicant(id, dataToSave);
       console.log('Firestore: saved applicant', id);
     } catch (err) {
       console.error('Firestore: save applicant failed', err);
@@ -770,8 +786,9 @@ export class AppComponent implements AfterViewInit {
       applicant.id = this.generateApplicantId();
     }
     try {
-      const { id, ...dataWithoutId } = applicant;
-      await this.firestoreService.saveApplicant(id, dataWithoutId);
+      const { id, ...rest } = applicant;
+      const dataToSave = this.normalizeApplicantForSave(rest as ApplicantRecord);
+      await this.firestoreService.saveApplicant(id, dataToSave);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(this.dataSource.data));
     } catch (err) {
       console.error('Firestore: immediate save failed', err);
