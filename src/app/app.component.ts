@@ -451,14 +451,6 @@ export class AppComponent implements AfterViewInit {
   toggleReviewEdit(element: ApplicantRecord, field: 'isEditingReview' | 'isEditingHatyjaComments' | 'isEditingEmailCommunications' | 'isEditingRiskReasons', event: MouseEvent) {
     event.stopPropagation();
 
-    // Store sort state and DISABLE dataSource sort to prevent internal re-ordering
-    this.preEditSortState = {
-      active: this.sort.active,
-      direction: this.sort.direction
-    };
-    this.preEditDataSourceSort = this.dataSource.sort;
-    this.dataSource.sort = null; // CRITICAL: Prevents MatTable from re-sorting rows
-
     // First, clear any other editing states in all records to avoid multiple textareas
     this.dataSource.data.forEach(r => {
       r.isEditingReview = false;
@@ -547,19 +539,6 @@ export class AppComponent implements AfterViewInit {
       this.editingReviewElement.isEditingRiskReasons = false;
 
       this.saveToStorage(this.editingReviewElement);
-
-      // Restore dataSource sort first (prevents re-ordering when we restore MatSort state)
-      if (this.preEditDataSourceSort !== null) {
-        this.dataSource.sort = this.preEditDataSourceSort;
-        this.preEditDataSourceSort = null;
-      }
-
-      // Restore original sort state after editing
-      if (this.preEditSortState) {
-        this.sort.active = this.preEditSortState.active;
-        this.sort.direction = this.preEditSortState.direction as any;
-        this.preEditSortState = null;
-      }
     }
     this.editingReviewElement = null;
   }
