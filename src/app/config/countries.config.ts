@@ -19,12 +19,26 @@ export const REGION_COUNTRY_MAP: Record<string, Set<string>> = {
     'macau', 'maldives', 'mongolia', 'nepal', 'north korea', 'pakistan',
     'philippines', 'singapore', 'south korea', 'sri lanka', 'thailand', 'timor-leste',
     'vietnam', 'Viet Nam', 'brunei', 'cambodia', 'indonesia', 'malaysia', 'myanmar',
-    'papua new guinea', 'samoa', 'solomon islands', 'tonga', 'tuvalu', 'vanuatu', 'Lao People\'s Democratic Republic (the)'
+    'papua new guinea', 'samoa', 'solomon islands', 'tonga', 'tuvalu', 'vanuatu',
+    'Lao People\'s Democratic Republic (the)', 'American Samoa', 'Australia',
+    'British Indian Ocean Territory', 'Brunei Darussalam', 'Christmas Island',
+    'Cocos (Keeling) Islands', 'Cook Islands', 'Fiji', 'French Polynesia', 'Guam',
+    'Kiribati', 'Marshall Islands', 'Micronesia (Federated States of)', 'Nauru',
+    'New Caledonia', 'New Zealand', 'Niue', 'Norfolk Island', 'Northern Mariana Islands',
+    'Palau', 'Pitcairn', 'Taiwan', 'Tokelau', 'Wallis and Futuna',
+    'Republic of Korea (the)', 'Democratic People\'s Republic of Korea (the)', 'Philippines (the)'
   ]),
   LAC: new Set([
     'argentina', 'bahamas', 'barbados', 'belize', 'bolivia', 'brazil', 'chile', 'colombia', 'costa rica',
     'cuba', 'dominican republic', 'ecuador', 'el salvador', 'guatemala', 'guyana', 'haiti', 'honduras',
-    'jamaica', 'mexico', 'nicaragua', 'panama', 'paraguay', 'peru', 'uruguay', 'venezuela'
+    'jamaica', 'mexico', 'nicaragua', 'panama', 'paraguay', 'peru', 'uruguay', 'venezuela',
+    'Anguilla', 'Antigua and Barbuda', 'Aruba', 'Bermuda', 'Bonaire, Sint Eustatius and Saba',
+    'Cayman Islands', 'Curacao', 'Dominica', 'Falkland Islands (Malvinas)', 'French Guiana',
+    'Grenada', 'Guadeloupe', 'Martinique', 'Montserrat', 'Puerto Rico', 'Saint Barthelemy',
+    'Saint Kitts and Nevis', 'Saint Lucia', 'Saint Martin', 'Saint Vincent and the Grenadines',
+    'Sint Maarten', 'Suriname', 'Trinidad and Tobago', 'Turks and Caicos Islands',
+    'Virgin Islands, British', 'Virgin Islands, US', 'Bolivia (Plurinational State of)',
+    'Venezuela (Bolivarian Republic of)'
   ]),
   AFR: new Set([
     'algeria', 'angola', 'benin', 'botswana', 'burkina faso', 'burundi', 'cameroon', 'cape verde', 'côte d\'ivoire', 'Central African Republic (the)',
@@ -34,7 +48,7 @@ export const REGION_COUNTRY_MAP: Record<string, Set<string>> = {
     'madagascar', 'malawi', 'mali', 'mauritania', 'mauritius', 'morocco', 'mozambique', 'namibia',
     'niger', 'nigeria', 'rwanda', 'sao tome and principe', 'senegal', 'seychelles', 'sierra leone',
     'somalia', 'south africa', 'south sudan', 'sudan', 'tanzania', 'togo', 'tunisia', 'uganda',
-    'zambia', 'zimbabwe'
+    'zambia', 'zimbabwe', 'Cabo Verde', 'Comoros (the)', 'Democratic Republic of the Congo (the)', 'Niger (the)'
   ]),
   ECM: new Set([
     'albania', 'armenia', 'azerbaijan', 'belarus', 'bosnia and herzegovina', 'bulgaria', 'croatia',
@@ -44,10 +58,17 @@ export const REGION_COUNTRY_MAP: Record<string, Set<string>> = {
     'iceland', 'ireland', 'italy', 'luxembourg', 'netherlands', 'norway', 'portugal', 'spain',
     'sweden', 'switzerland', 'united kingdom',
     'bahrain', 'iran', 'iraq', 'israel', 'jordan', 'kuwait', 'lebanon', 'oman', 'palestine', 'qatar',
-    'saudi arabia', 'syria', 'united arab emirates', 'yemen', 'kyrgyzstan', 'tajikistan', 'turkmenistan', 'uzbekistan'
+    'saudi arabia', 'syria', 'united arab emirates', 'yemen', 'kazakhstan', 'kyrgyzstan', 'tajikistan',
+    'turkmenistan', 'uzbekistan', 'Aland Islands', 'Andorra', 'Faroe Islands', 'Gibraltar', 'Greenland',
+    'Guernsey', 'Isle of Man', 'Jersey', 'Kosovo', 'Liechtenstein', 'Malta', 'Monaco', 'San Marino',
+    'Svalbard and Jan Mayen', 'Vatican City', 'Iran (Islamic Republic of)', 'Russian Federation',
+    'Netherlands (the)', 'Czech Republic (the)', 'Syrian Arab Republic'
   ]),
   INTERNATIONAL: new Set([
-    'united nations', 'world bank', 'international', 'global', 'multilateral'
+    'united nations', 'world bank', 'international', 'global', 'multilateral',
+    'Antarctica', 'Bouvet Island', 'Canada', 'French Southern Territories',
+    'Heard Island and McDonald Islands', 'South Georgia and the South Sandwich Islands',
+    'United States', 'United States Minor Outlying Islands', 'Saint Pierre and Miquelon'
   ])
 };
 
