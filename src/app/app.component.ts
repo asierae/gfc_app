@@ -18,6 +18,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatMenuModule } from '@angular/material/menu';
 import * as XLSX from 'xlsx';
 import { FirestoreService } from './firestore.service';
 import { SkillsService } from './services/skills.service';
@@ -61,6 +62,7 @@ export interface ApplicantRecord {
   isEditingHatyjaComments?: boolean;
   isEditingEmailCommunications?: boolean;
   isEditingRiskReasons?: boolean;
+  archived?: boolean;
 }
 
 export interface DashboardStats {
@@ -105,7 +107,8 @@ const STORAGE_KEY = 'gfc_applicant_data';
     MatSelectModule,
     MatChipsModule,
     MatExpansionModule,
-    MatTooltipModule
+    MatTooltipModule,
+    MatMenuModule
   ],
   templateUrl: './app.component.html',
   styleUrls: ['./app.component.css']
@@ -123,6 +126,7 @@ export class AppComponent implements AfterViewInit {
   filterRegion: string = 'All';
   filterEntityType: string = 'All';
   filterStatus: string = 'All';
+  showArchived = false;
   readonly statusOptions: string[] = ['All', 'Pending', 'Passed', 'Failed', 'Invited'];
   private readonly validPassedValues = new Set(['Pending', 'Passed', 'Failed', 'Invited']);
 
@@ -157,8 +161,12 @@ export class AppComponent implements AfterViewInit {
   editingReviewElement: ApplicantRecord | null = null;
   selectedColumnKeys: string[] = [];
 
+  private get activeRecords(): ApplicantRecord[] {
+    return this.dataSource.data.filter(r => !r.archived);
+  }
+
   get stats(): DashboardStats {
-    const data = this.dataSource.data;
+    const data = this.activeRecords;
     const total = data.length;
     if (total === 0) {
       return {
@@ -267,8 +275,8 @@ export class AppComponent implements AfterViewInit {
     
     // Set up custom filter predicate
     this.dataSource.filterPredicate = (data: ApplicantRecord, filter: string) => {
-      const defaultTerms = { text: '', region: 'All', entityType: 'All', status: 'All', start: null, end: null };
-      const searchTerms: { text: string; region: string; entityType: string; status: string; start?: Date | null; end?: Date | null } =
+      const defaultTerms = { text: '', region: 'All', entityType: 'All', status: 'All', start: null, end: null, showArchived: false };
+      const searchTerms: { text: string; region: string; entityType: string; status: string; start?: Date | null; end?: Date | null; showArchived?: boolean } =
         (typeof filter === 'string' && filter.trim().startsWith('{'))
           ? JSON.parse(filter)
           : defaultTerms;
@@ -322,7 +330,11 @@ export class AppComponent implements AfterViewInit {
         }
       }
 
-      return matchesSearch && matchesRegion && matchesDate && matchesEntityType && matchesStatus;
+      const isArchived = !!data.archived;
+      const showArchived = searchTerms.showArchived === true;
+      const matchesArchived = showArchived ? isArchived : !isArchived;
+
+      return matchesSearch && matchesRegion && matchesDate && matchesEntityType && matchesStatus && matchesArchived;
     };
 
     // Restore column visibility from localStorage, then Firestore
@@ -354,9 +366,12 @@ export class AppComponent implements AfterViewInit {
           this.hydrateRecords(parsed);
           this.dataSource.data = parsed;
           this.deferFilterCountRefresh();
+          this.updateFilter();
           this.showToast(`${parsed.length} records loaded (local cache).`, 'info');
         }
       } catch { /* ignore corrupt data */ }
+    } else {
+      this.updateFilter();
     }
 
     // Then load from Firestore (source of truth)
@@ -390,6 +405,7 @@ export class AppComponent implements AfterViewInit {
       this.ngZone.run(() => {
         this.dataSource.data = applicants;
         this.deferFilterCountRefresh();
+        this.updateFilter();
         localStorage.setItem(STORAGE_KEY, JSON.stringify(applicants));
         this.showToast(`${applicants.length} records synced from cloud.`, 'success');
       });
@@ -415,6 +431,7 @@ export class AppComponent implements AfterViewInit {
       this.ngZone.run(() => {
         this.dataSource.data = applicants;
         this.deferFilterCountRefresh();
+        this.updateFilter();
         localStorage.setItem(STORAGE_KEY, JSON.stringify(applicants));
       });
     });
@@ -555,13 +572,20 @@ export class AppComponent implements AfterViewInit {
       entityType: this.filterEntityType,
       status: this.filterStatus,
       start: this.filterStartDate,
-      end: this.filterEndDate
+      end: this.filterEndDate,
+      showArchived: this.showArchived
     };
     this.dataSource.filter = JSON.stringify(filterValue);
-    
+
     if (this.dataSource.paginator) {
       this.dataSource.paginator.firstPage();
     }
+  }
+
+  onShowArchivedChange() {
+    this.selection.clear();
+    this.updateFilter();
+    this.deferFilterCountRefresh();
   }
 
   clearSearch(input: HTMLInputElement) {
@@ -598,7 +622,7 @@ export class AppComponent implements AfterViewInit {
   }
 
   private getRegionCounts(): Record<string, number> {
-    const rowRegions = this.dataSource.data.map(record => this.getRegionByCountry(record.country));
+    const rowRegions = this.getFilterCountSource().map(record => this.getRegionByCountry(record.country));
     const counts: Record<string, number> = {};
 
     this.regionOptions.forEach(regionOption => {
@@ -650,10 +674,16 @@ export class AppComponent implements AfterViewInit {
       .sort((a, b) => b.count - a.count);
   }
 
+  private getFilterCountSource(): ApplicantRecord[] {
+    return this.showArchived
+      ? this.dataSource.data.filter(r => r.archived)
+      : this.activeRecords;
+  }
+
   private getEntityTypeCounts2(): Record<string, number> {
     const counts: Record<string, number> = {};
     this.entityTypeOptions.forEach(opt => { counts[opt] = 0; });
-    this.dataSource.data.forEach(record => {
+    this.getFilterCountSource().forEach(record => {
       const normalized = this.normalizeEntityType(record.entityType);
       counts[normalized] = (counts[normalized] || 0) + 1;
       counts['All'] = (counts['All'] || 0) + 1;
@@ -670,7 +700,7 @@ export class AppComponent implements AfterViewInit {
   }
 
   private refreshStatusOptionsWithCount() {
-    const data = this.dataSource.data;
+    const data = this.getFilterCountSource();
     const counts: Record<string, number> = { All: data.length };
     data.forEach(d => {
       if (d.passed === 'Passed') counts['Passed'] = (counts['Passed'] || 0) + 1;
@@ -874,15 +904,45 @@ export class AppComponent implements AfterViewInit {
 
   // Selection helpers
   isAllSelected() {
-    const numSelected = this.selection.selected.length;
-    const numRows = this.dataSource.data.length;
-    return numSelected === numRows;
+    const visible = this.dataSource.filteredData;
+    return visible.length > 0 && visible.every(row => this.selection.isSelected(row));
   }
 
   masterToggle() {
-    this.isAllSelected() ?
-      this.selection.clear() :
-      this.dataSource.data.forEach(row => this.selection.select(row));
+    const visible = this.dataSource.filteredData;
+    if (this.isAllSelected()) {
+      this.selection.clear();
+    } else {
+      visible.forEach(row => this.selection.select(row));
+    }
+  }
+
+  async archiveSelectedRows() {
+    const selected = this.selection.selected;
+    if (selected.length === 0) return;
+
+    for (const row of selected) {
+      row.archived = true;
+      await this.saveApplicantImmediate(row);
+    }
+    this.selection.clear();
+    this.deferFilterCountRefresh();
+    this.updateFilter();
+    this.showToast(`${selected.length} record(s) archived.`, 'info');
+  }
+
+  async unarchiveSelectedRows() {
+    const selected = this.selection.selected;
+    if (selected.length === 0) return;
+
+    for (const row of selected) {
+      row.archived = false;
+      await this.saveApplicantImmediate(row);
+    }
+    this.selection.clear();
+    this.deferFilterCountRefresh();
+    this.updateFilter();
+    this.showToast(`${selected.length} record(s) restored.`, 'info');
   }
 
   async deleteSelectedRows() {
@@ -908,39 +968,41 @@ export class AppComponent implements AfterViewInit {
   // Remove individual deleteRow as it's replaced by the selection model
 
   exportToExcel(selectedOnly: boolean): void {
-    let dataToExport: any[] = [];
-
-    if (selectedOnly) {
-      // Filter columns based on visibility
-      dataToExport = this.dataSource.data.map(row => {
-        const filteredRow: any = {};
-        this.columnKeys.forEach(key => {
-          if ((this.columnVisibility as any)[key]) {
-            filteredRow[this.columnNames[key]] = (row as any)[key];
-          }
-        });
-        return filteredRow;
-      });
-    } else {
-      // Export all columns
-      dataToExport = this.dataSource.data.map(row => {
-        const fullRow: any = {};
-        this.columnKeys.forEach(key => {
-          fullRow[this.columnNames[key]] = (row as any)[key];
-        });
-        return fullRow;
-      });
+    const rows = selectedOnly ? this.selection.selected : this.dataSource.filteredData;
+    if (selectedOnly && rows.length === 0) {
+      this.showToast('Select at least one row to export.', 'error');
+      return;
     }
+
+    const dataToExport = rows.map(row => {
+      const exportRow: Record<string, unknown> = {};
+      this.columnKeys.forEach(key => {
+        if (!selectedOnly || (this.columnVisibility as any)[key]) {
+          exportRow[this.columnNames[key]] = (row as any)[key];
+        }
+      });
+      return exportRow;
+    });
 
     const worksheet: XLSX.WorkSheet = XLSX.utils.json_to_sheet(dataToExport);
     const workbook: XLSX.WorkBook = { Sheets: { 'data': worksheet }, SheetNames: ['data'] };
-    XLSX.writeFile(workbook, 'ApplicantData.xlsx');
-    this.showToast('Excel exported successfully!', 'success');
+    const suffix = selectedOnly ? 'Selected' : 'Export';
+    XLSX.writeFile(workbook, `ApplicantData_${suffix}.xlsx`);
+    this.showToast(
+      selectedOnly
+        ? `${rows.length} selected row(s) exported.`
+        : 'Excel exported successfully!',
+      'success'
+    );
   }
 
   copyTableToClipboard(selectedOnly: boolean): void {
-    const data = this.dataSource.data;
-    const columns = this.columnKeys.filter(key => (!selectedOnly || (this.columnVisibility as any)[key]));
+    const data = selectedOnly ? this.selection.selected : this.dataSource.filteredData;
+    if (selectedOnly && data.length === 0) {
+      this.showToast('Select at least one row to copy.', 'error');
+      return;
+    }
+    const columns = this.columnKeys.filter(key => (this.columnVisibility as any)[key]);
 
     // Create headers row
     const headers = columns.map(key => this.columnNames[key]).join('\t');
@@ -960,7 +1022,10 @@ export class AppComponent implements AfterViewInit {
     const tsv = [headers, ...rows].join('\n');
 
     navigator.clipboard.writeText(tsv).then(() => {
-      this.showToast('Copied to clipboard! You can now paste into Excel.', 'success');
+      const msg = selectedOnly
+        ? `${data.length} selected row(s) copied to clipboard.`
+        : 'Copied to clipboard! You can now paste into Excel.';
+      this.showToast(msg, 'success');
     }).catch(err => {
       this.showToast('Failed to copy to clipboard.', 'error');
       console.error('Clipboard error:', err);
