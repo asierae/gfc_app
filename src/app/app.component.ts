@@ -128,8 +128,10 @@ export class AppComponent implements AfterViewInit {
   filterRegion: string = 'All';
   filterEntityType: string = 'All';
   filterStatus: string = 'All';
+  filterWindow: string = 'All';
   showArchived = false;
   readonly statusOptions: string[] = ['All', 'Pending', 'Passed', 'Failed', 'Invited'];
+  readonly windowOptions: string[] = ['All', '1', '2', '3'];
   private readonly validPassedValues = new Set(['Pending', 'Passed', 'Failed', 'Invited']);
 
   // --- Risk Investigation Skills ---
@@ -279,8 +281,8 @@ export class AppComponent implements AfterViewInit {
     
     // Set up custom filter predicate
     this.dataSource.filterPredicate = (data: ApplicantRecord, filter: string) => {
-      const defaultTerms = { text: '', region: 'All', entityType: 'All', status: 'All', start: null, end: null, showArchived: false };
-      const searchTerms: { text: string; region: string; entityType: string; status: string; start?: Date | null; end?: Date | null; showArchived?: boolean } =
+      const defaultTerms = { text: '', region: 'All', entityType: 'All', status: 'All', window: 'All', start: null, end: null, showArchived: false };
+      const searchTerms: { text: string; region: string; entityType: string; status: string; window: string; start?: Date | null; end?: Date | null; showArchived?: boolean } =
         (typeof filter === 'string' && filter.trim().startsWith('{'))
           ? JSON.parse(filter)
           : defaultTerms;
@@ -334,11 +336,17 @@ export class AppComponent implements AfterViewInit {
         }
       }
 
+      // 5. Window Filter
+      let matchesWindow = true;
+      if (searchTerms.window && searchTerms.window !== 'All') {
+        matchesWindow = data.window === parseInt(searchTerms.window, 10);
+      }
+
       const isArchived = !!data.archived;
       const showArchived = searchTerms.showArchived === true;
       const matchesArchived = showArchived ? isArchived : !isArchived;
 
-      return matchesSearch && matchesRegion && matchesDate && matchesEntityType && matchesStatus && matchesArchived;
+      return matchesSearch && matchesRegion && matchesDate && matchesEntityType && matchesStatus && matchesWindow && matchesArchived;
     };
 
     // Restore column visibility from localStorage, then Firestore
@@ -579,6 +587,7 @@ export class AppComponent implements AfterViewInit {
       region: this.filterRegion,
       entityType: this.filterEntityType,
       status: this.filterStatus,
+      window: this.filterWindow,
       start: this.filterStartDate,
       end: this.filterEndDate,
       showArchived: this.showArchived
@@ -608,6 +617,12 @@ export class AppComponent implements AfterViewInit {
     this.updateFilter();
   }
 
+  clearInvitedDate(element: ApplicantRecord, event: Event) {
+    event.stopPropagation();
+    element.invited = null;
+    this.saveToStorage(element);
+  }
+
   onRegionFilterChange() {
     this.updateFilter();
   }
@@ -618,6 +633,23 @@ export class AppComponent implements AfterViewInit {
 
   onStatusFilterChange() {
     this.updateFilter();
+  }
+
+  onWindowFilterChange() {
+    this.updateFilter();
+  }
+
+  clearAllFilters() {
+    this.filterText = '';
+    this.filterStartDate = null;
+    this.filterEndDate = null;
+    this.filterRegion = 'All';
+    this.filterEntityType = 'All';
+    this.filterStatus = 'All';
+    this.filterWindow = 'All';
+    this.showArchived = false;
+    this.updateFilter();
+    this.showToast('All filters cleared.', 'info');
   }
 
   private getRegionByCountry(country?: string): string {

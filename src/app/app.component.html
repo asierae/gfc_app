@@ -313,6 +313,20 @@
       </mat-select>
     </div>
 
+    <div class="window-filter-wrapper">
+      <mat-icon class="window-icon">window</mat-icon>
+      <mat-select
+        class="window-pill-select"
+        [panelClass]="'window-select-panel'"
+        [panelWidth]="'160px'"
+        [(ngModel)]="filterWindow"
+        (selectionChange)="onWindowFilterChange()">
+        <mat-option *ngFor="let opt of windowOptions" [value]="opt">
+          {{ opt }}
+        </mat-option>
+      </mat-select>
+    </div>
+
     <div class="show-archived-wrapper">
       <mat-checkbox
         [(ngModel)]="showArchived"
@@ -331,6 +345,10 @@
       <button mat-flat-button color="primary" class="quick-copy-btn" (click)="copyTableToClipboard(true)">
         <mat-icon>content_copy</mat-icon>
         Copy (Selected)
+      </button>
+      <button mat-stroked-button color="warn" class="clear-filters-btn" (click)="clearAllFilters()">
+        <mat-icon>clear_all</mat-icon>
+        Clear Filters
       </button>
     </div>
   </div>
@@ -380,6 +398,14 @@
             <div class="date-cell" (click)="invitedPicker.open()">
               <input matInput [matDatepicker]="invitedPicker" [(ngModel)]="element.invited" (ngModelChange)="saveToStorage(element)" class="editable-cell date-input" readonly>
               <mat-datepicker #invitedPicker></mat-datepicker>
+              <button 
+                *ngIf="element.invited" 
+                mat-icon-button 
+                class="clear-date-btn"
+                (click)="clearInvitedDate(element, $event)"
+                matTooltip="Clear date">
+                <mat-icon>close</mat-icon>
+              </button>
             </div>
           </td>
         </ng-container>
