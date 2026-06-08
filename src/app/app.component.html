@@ -359,6 +359,31 @@
           </td>
         </ng-container>
 
+        <!-- Window Column -->
+        <ng-container matColumnDef="window">
+          <th mat-header-cell *matHeaderCellDef mat-sort-header [hidden]="!columnVisibility.window">
+            Window
+            <div #resizerWin class="custom-resizer" (mousedown)="initResize($event, resizerWin)"></div>
+          </th>
+          <td mat-cell *matCellDef="let element" [hidden]="!columnVisibility.window">
+            <input type="number" [(ngModel)]="element.window" class="editable-cell number-input" (blur)="saveToStorage(element)">
+          </td>
+        </ng-container>
+
+        <!-- Invited Column -->
+        <ng-container matColumnDef="invited">
+          <th mat-header-cell *matHeaderCellDef mat-sort-header [hidden]="!columnVisibility.invited">
+            Invited
+            <div #resizerInv class="custom-resizer" (mousedown)="initResize($event, resizerInv)"></div>
+          </th>
+          <td mat-cell *matCellDef="let element" [hidden]="!columnVisibility.invited">
+            <div class="date-cell" (click)="invitedPicker.open()">
+              <input matInput [matDatepicker]="invitedPicker" [(ngModel)]="element.invited" (ngModelChange)="saveToStorage(element)" class="editable-cell date-input" readonly>
+              <mat-datepicker #invitedPicker></mat-datepicker>
+            </div>
+          </td>
+        </ng-container>
+
         <!-- Applicant Column -->
         <ng-container matColumnDef="applicant">
           <th mat-header-cell *matHeaderCellDef mat-sort-header [hidden]="!columnVisibility.applicant">
@@ -400,19 +425,19 @@
             </div>
             
             <mat-menu #statusMenu="matMenu" xPosition="after" class="premium-status-menu">
-              <button mat-menu-item (click)="element.passed = 'Pending'; saveToStorage(element)" class="status-menu-item">
+              <button mat-menu-item (click)="setStatus(element,'Pending')" class="status-menu-item">
                 <span class="status-dot status-pending-dot"></span>
                 <span class="status-menu-text">Pending</span>
               </button>
-              <button mat-menu-item (click)="element.passed = 'Passed'; saveToStorage(element)" class="status-menu-item">
+              <button mat-menu-item (click)="setStatus(element,'Passed')" class="status-menu-item">
                 <span class="status-dot status-passed-dot"></span>
                 <span class="status-menu-text">Passed</span>
               </button>
-              <button mat-menu-item (click)="element.passed = 'Failed'; saveToStorage(element)" class="status-menu-item">
+              <button mat-menu-item (click)="setStatus(element,'Failed')" class="status-menu-item">
                 <span class="status-dot status-failed-dot"></span>
                 <span class="status-menu-text">Failed</span>
               </button>
-              <button mat-menu-item (click)="element.passed = 'Invited'; saveToStorage(element)" class="status-menu-item">
+              <button mat-menu-item (click)="setStatus(element,'Invited')" class="status-menu-item">
                 <span class="status-dot status-invited-dot"></span>
                 <span class="status-menu-text">Invited</span>
               </button>

@@ -39,6 +39,8 @@ export interface ApplicantRecord {
   passed: string;
   // Middle columns
   submittedAt?: Date | string;
+  window?: number | null;
+  invited?: Date | string | null;
   preScreening?: string;
   profiles?: string;
   // End columns
@@ -267,6 +269,8 @@ export class AppComponent implements AfterViewInit {
       switch (property) {
         case 'submittedAt':
           return item.submittedAt ? new Date(item.submittedAt).getTime() : 0;
+        case 'invited':
+          return item.invited ? new Date(item.invited).getTime() : 0;
         default:
           const val = (item as any)[property];
           return typeof val === 'string' ? val.toLowerCase() : val || '';
@@ -383,6 +387,10 @@ export class AppComponent implements AfterViewInit {
       if (record.submittedAt) {
         const d = new Date(record.submittedAt);
         if (!isNaN(d.getTime())) record.submittedAt = d;
+      }
+      if (record.invited) {
+        const di = new Date(record.invited);
+        if (!isNaN(di.getTime())) record.invited = di;
       }
     });
   }
@@ -771,6 +779,12 @@ export class AppComponent implements AfterViewInit {
     } else if (!data.submittedAt || String(data.submittedAt).trim() === '') {
       data.submittedAt = null; // Explicit null for Firestore
     }
+    // invited date handling
+    if (data.invited instanceof Date) {
+      data.invited = data.invited.toISOString();
+    } else if (!data.invited || String(data.invited).trim() === '') {
+      data.invited = null;
+    }
     // Remove UI-only flags before saving to Firestore
     delete data.isEditingReview;
     delete data.isEditingHatyjaComments;
@@ -838,6 +852,9 @@ export class AppComponent implements AfterViewInit {
     emailCommunications: true,
     riskPercent: true,
     riskReasons: true
+    ,
+    window: true,
+    invited: true
   };
 
   updateDisplayedColumns() {
@@ -850,11 +867,14 @@ export class AppComponent implements AfterViewInit {
   }
 
   onColumnSelectionChange() {
+    // Ensure `selectedColumnKeys` follow the canonical `columnKeys` order
+    this.selectedColumnKeys = this.columnKeys.filter(k => this.selectedColumnKeys.includes(k));
+
     // Reset all to false first
     Object.keys(this.columnVisibility).forEach(key => {
       (this.columnVisibility as any)[key] = false;
     });
-    // Set selected to true
+    // Set selected to true (in ordered sequence)
     this.selectedColumnKeys.forEach(key => {
       (this.columnVisibility as any)[key] = true;
     });
@@ -869,7 +889,7 @@ export class AppComponent implements AfterViewInit {
 
   // Helper arrays for UI presentation
   columnKeys = [
-    'applicant', 'acronym', 'passed', 'entityType',
+    'applicant', 'acronym', 'passed', 'window', 'invited', 'entityType',
     'submittedAt', 'preScreening', 'profiles',
     'country', 'address', 'nolStatus', 'hatyjaReviewComments', 'emailCommunications', 'redFlags',
     'djResult', 'djReportNumber', 'djReportLink', 'djTruePositive', 'djFalsePositive', 'escalationRequired', 'hatyjaComments',
@@ -900,12 +920,25 @@ export class AppComponent implements AfterViewInit {
     emailCommunications: 'Email Communications',
     riskPercent: 'Risk %',
     riskReasons: 'Reasons'
+    ,
+    window: 'Window',
+    invited: 'Invited'
   };
 
   // Selection helpers
   isAllSelected() {
     const visible = this.dataSource.filteredData;
     return visible.length > 0 && visible.every(row => this.selection.isSelected(row));
+  }
+
+  setStatus(element: ApplicantRecord, status: string) {
+    element.passed = status;
+    if (status === 'Invited') {
+      if (!element.invited) element.invited = new Date();
+    }
+    this.saveToStorage(element);
+    this.deferFilterCountRefresh();
+    this.updateFilter();
   }
 
   masterToggle() {
