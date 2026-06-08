@@ -314,15 +314,15 @@
     </div>
 
     <div class="window-filter-wrapper">
-      <mat-icon class="window-icon">window</mat-icon>
+      <mat-icon class="status-icon">timer</mat-icon>
       <mat-select
-        class="window-pill-select"
-        [panelClass]="'window-select-panel'"
-        [panelWidth]="'160px'"
+        class="status-pill-select"
+        [panelClass]="'status-select-panel'"
+        [panelWidth]="'220px'"
         [(ngModel)]="filterWindow"
         (selectionChange)="onWindowFilterChange()">
-        <mat-option *ngFor="let opt of windowOptions" [value]="opt">
-          {{ opt }}
+        <mat-option *ngFor="let opt of windowOptionsWithCount" [value]="opt.value">
+          {{ opt.label }}
         </mat-option>
       </mat-select>
     </div>
@@ -346,7 +346,7 @@
         <mat-icon>content_copy</mat-icon>
         Copy (Selected)
       </button>
-      <button mat-stroked-button color="warn" class="clear-filters-btn" (click)="clearAllFilters()">
+      <button *ngIf="isAnyFilterActive()" mat-stroked-button color="warn" class="clear-filters-btn" (click)="clearAllFilters(searchInput)">
         <mat-icon>clear_all</mat-icon>
         Clear Filters
       </button>

@@ -125,13 +125,14 @@ export class AppComponent implements AfterViewInit {
   filterText: string = '';
   filterStartDate?: Date | null;
   filterEndDate?: Date | null;
+  filterWindow: string = 'All';
   filterRegion: string = 'All';
   filterEntityType: string = 'All';
   filterStatus: string = 'All';
-  filterWindow: string = 'All';
   showArchived = false;
   readonly statusOptions: string[] = ['All', 'Pending', 'Passed', 'Failed', 'Invited'];
   readonly windowOptions: string[] = ['All', '1', '2', '3'];
+  windowOptionsWithCount: { value: string; label: string }[] = [];
   private readonly validPassedValues = new Set(['Pending', 'Passed', 'Failed', 'Invited']);
 
   // --- Risk Investigation Skills ---
@@ -281,11 +282,11 @@ export class AppComponent implements AfterViewInit {
     
     // Set up custom filter predicate
     this.dataSource.filterPredicate = (data: ApplicantRecord, filter: string) => {
-      const defaultTerms = { text: '', region: 'All', entityType: 'All', status: 'All', window: 'All', start: null, end: null, showArchived: false };
-      const searchTerms: { text: string; region: string; entityType: string; status: string; window: string; start?: Date | null; end?: Date | null; showArchived?: boolean } =
-        (typeof filter === 'string' && filter.trim().startsWith('{'))
-          ? JSON.parse(filter)
-          : defaultTerms;
+        const defaultTerms = { text: '', region: 'All', entityType: 'All', status: 'All', window: 'All', start: null, end: null, showArchived: false };
+        const searchTerms: { text: string; region: string; entityType: string; status: string; window?: string; start?: Date | null; end?: Date | null; showArchived?: boolean } =
+          (typeof filter === 'string' && filter.trim().startsWith('{'))
+            ? JSON.parse(filter)
+            : defaultTerms;
       
       // 1. Text Search (over specific columns)
       const dataStr = (
@@ -336,10 +337,11 @@ export class AppComponent implements AfterViewInit {
         }
       }
 
-      // 5. Window Filter
+      // 5. Window dropdown filter (exact match)
       let matchesWindow = true;
       if (searchTerms.window && searchTerms.window !== 'All') {
-        matchesWindow = data.window === parseInt(searchTerms.window, 10);
+        const w = (data.window !== undefined && data.window !== null) ? Number((data as any).window) : NaN;
+        matchesWindow = !isNaN(w) && w === parseInt(searchTerms.window, 10);
       }
 
       const isArchived = !!data.archived;
@@ -617,6 +619,33 @@ export class AppComponent implements AfterViewInit {
     this.updateFilter();
   }
 
+  isAnyFilterActive(): boolean {
+    return !!(
+      (this.filterText && this.filterText.trim() !== '') ||
+      this.filterStartDate ||
+      this.filterEndDate ||
+      (this.filterRegion && this.filterRegion !== 'All') ||
+      (this.filterEntityType && this.filterEntityType !== 'All') ||
+      (this.filterStatus && this.filterStatus !== 'All') ||
+      (this.filterWindow && this.filterWindow !== 'All') ||
+      this.showArchived
+    );
+  }
+
+  clearAllFilters(searchInput?: HTMLInputElement) {
+    if (searchInput) searchInput.value = '';
+    this.filterText = '';
+    this.filterStartDate = null;
+    this.filterEndDate = null;
+    this.filterRegion = 'All';
+    this.filterEntityType = 'All';
+    this.filterStatus = 'All';
+    this.filterWindow = 'All';
+    this.showArchived = false;
+    this.updateFilter();
+    this.deferFilterCountRefresh();
+  }
+
   clearInvitedDate(element: ApplicantRecord, event: Event) {
     event.stopPropagation();
     element.invited = null;
@@ -638,19 +667,7 @@ export class AppComponent implements AfterViewInit {
   onWindowFilterChange() {
     this.updateFilter();
   }
-
-  clearAllFilters() {
-    this.filterText = '';
-    this.filterStartDate = null;
-    this.filterEndDate = null;
-    this.filterRegion = 'All';
-    this.filterEntityType = 'All';
-    this.filterStatus = 'All';
-    this.filterWindow = 'All';
-    this.showArchived = false;
-    this.updateFilter();
-    this.showToast('All filters cleared.', 'info');
-  }
+  
 
   private getRegionByCountry(country?: string): string {
     return getRegionByCountry(country || '', this.countryToRegionMap);
@@ -754,10 +771,21 @@ export class AppComponent implements AfterViewInit {
     }));
   }
 
+  private refreshWindowOptionsWithCount() {
+    const data = this.getFilterCountSource();
+    const counts: Record<string, number> = { All: data.length };
+    data.forEach(d => {
+      const w = String(d.window ?? '');
+      if (w) counts[w] = (counts[w] || 0) + 1;
+    });
+    this.windowOptionsWithCount = this.windowOptions.map(opt => ({ value: opt, label: `${opt} (${counts[opt] ?? 0})` }));
+  }
+
   private deferFilterCountRefresh() {
     this.refreshRegionOptionsWithCount();
     this.refreshEntityTypeOptionsWithCount();
     this.refreshStatusOptionsWithCount();
+    this.refreshWindowOptionsWithCount();
   }
 
   // ── Toast Notifications ──────────────────────────────────────

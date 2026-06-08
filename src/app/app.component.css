@@ -545,6 +545,28 @@ mat-chip-row {
   box-shadow: 0 0 0 3px rgba(42,82,152,0.15);
 }
 
+/* window filter uses the same pill style as status */
+.window-filter-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background: white;
+  border-radius: 12px;
+  height: 54px;
+  padding: 0 14px 0 16px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  min-width: 160px;
+  box-sizing: border-box;
+  transition: all 0.3s ease;
+  flex-shrink: 0;
+}
+
+.window-filter-wrapper:focus-within {
+  border-color: #2a5298;
+  box-shadow: 0 0 0 3px rgba(42,82,152,0.15);
+}
+
 .show-archived-wrapper {
   display: flex;
   align-items: center;
@@ -568,7 +590,8 @@ mat-chip-row {
   white-space: nowrap;
 }
 
-.status-icon {
+.status-icon,
+.window-icon {
   position: absolute;
   left: 14px;
   top: 50%;
@@ -581,11 +604,13 @@ mat-chip-row {
   z-index: 2;
 }
 
-.status-pill-select {
+.status-pill-select,
+.window-pill-select {
   width: 100%;
 }
 
-.status-pill-select ::ng-deep .mat-mdc-select-trigger {
+.status-pill-select ::ng-deep .mat-mdc-select-trigger,
+.window-pill-select ::ng-deep .mat-mdc-select-trigger {
   height: 54px;
   display: flex;
   align-items: center;
@@ -594,23 +619,27 @@ mat-chip-row {
   padding-left: 28px;
 }
 
-.status-pill-select ::ng-deep .mat-mdc-select-value {
+.status-pill-select ::ng-deep .mat-mdc-select-value,
+.window-pill-select ::ng-deep .mat-mdc-select-value {
   color: #1e293b !important;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.status-pill-select ::ng-deep .mat-mdc-select-arrow {
+.status-pill-select ::ng-deep .mat-mdc-select-arrow,
+.window-pill-select ::ng-deep .mat-mdc-select-arrow {
   color: #64748b;
 }
 
-.status-select-panel {
+.status-select-panel,
+.window-select-panel {
   width: 220px !important;
   min-width: 220px !important;
   max-width: 220px !important;
 }
 
-.status-select-panel .mat-mdc-option .mdc-list-item__primary-text {
+.status-select-panel .mat-mdc-option .mdc-list-item__primary-text,
+.window-select-panel .mat-mdc-option .mdc-list-item__primary-text {
   white-space: normal;
   line-height: 1.25;
 }
@@ -618,14 +647,16 @@ mat-chip-row {
 /* ── Hide mat-select default underline for all pill selects ── */
 ::ng-deep .region-pill-select .mdc-line-ripple,
 ::ng-deep .entity-type-pill-select .mdc-line-ripple,
-::ng-deep .status-pill-select .mdc-line-ripple {
+::ng-deep .status-pill-select .mdc-line-ripple,
+::ng-deep .window-pill-select .mdc-line-ripple {
   display: none !important;
 }
 
 /* Force dropdown text visible in all filter pills */
 :host ::ng-deep .region-filter-wrapper .mat-mdc-select-value-text,
 :host ::ng-deep .entity-type-filter-wrapper .mat-mdc-select-value-text,
-:host ::ng-deep .status-filter-wrapper .mat-mdc-select-value-text {
+:host ::ng-deep .status-filter-wrapper .mat-mdc-select-value-text,
+:host ::ng-deep .window-filter-wrapper .mat-mdc-select-value-text {
   color: #1e293b !important;
   opacity: 1 !important;
   font-size: 14px !important;
@@ -634,7 +665,8 @@ mat-chip-row {
 
 :host ::ng-deep .region-filter-wrapper .mat-mdc-select-placeholder,
 :host ::ng-deep .entity-type-filter-wrapper .mat-mdc-select-placeholder,
-:host ::ng-deep .status-filter-wrapper .mat-mdc-select-placeholder {
+:host ::ng-deep .status-filter-wrapper .mat-mdc-select-placeholder,
+:host ::ng-deep .window-filter-wrapper .mat-mdc-select-placeholder {
   color: #94a3b8 !important;
   opacity: 1 !important;
 }
