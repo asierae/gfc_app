@@ -442,6 +442,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
 
   /** Merge Firestore updates in place so pagination and sort position are preserved. */
   private mergeApplicantsFromFirestore(applicants: ApplicantRecord[]) {
+    if (this.importInProgress) return;
+
     const incomingById = new Map(applicants.filter(a => a.id).map(a => [a.id!, a]));
     const firestoreIds = new Set(incomingById.keys());
     let structureChanged = false;
@@ -506,6 +508,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   private readonly LOCAL_TIMESTAMP_KEY = 'gfc_data_updated_at';
   private readonly DIRTY_APPLICANTS_KEY = 'gfc_dirty_applicants';
   private dirtyApplicantIds = new Map<string, string>();
+  private importInProgress = false;
   private unsubscribeFromApplicants: (() => void) | null = null;
   private lastAppliedFilter = '';
 
@@ -1494,26 +1497,11 @@ export class AppComponent implements AfterViewInit, OnDestroy {
                 ? `https://partners.greenclimate.fund/pre-accreditation/${val}/staff/preview`
                 : val;
             })(),
-            djResult: (() => {
-              const raw = cellStr(idxDjResult, row).toLowerCase();
-              return raw === 'yes' ? 'Yes' : (raw ? 'No' : '');
-            })(),
+            djResult: this.normalizeDjDropdownImport('djResult', cellStr(idxDjResult, row)),
             djReportNumber: cellStr(idxDjNumber, row),
             djReportLink: cellStr(idxDjLink, row),
-            djTruePositive: (() => {
-              const raw = cellStr(idxDjTrue, row).toLowerCase();
-              if (raw === 'yes') return 'Yes';
-              if (raw === 'no') return 'No';
-              if (raw === 'n/a' || raw === 'na') return 'N/A';
-              return '';
-            })(),
-            djFalsePositive: (() => {
-              const raw = cellStr(idxDjFalse, row).toLowerCase();
-              if (raw === 'yes') return 'Yes';
-              if (raw === 'no') return 'No';
-              if (raw === 'n/a' || raw === 'na') return 'N/A';
-              return '';
-            })(),
+            djTruePositive: this.normalizeDjDropdownImport('djTruePositive', cellStr(idxDjTrue, row)),
+            djFalsePositive: this.normalizeDjDropdownImport('djFalsePositive', cellStr(idxDjFalse, row)),
             escalationRequired: cellStr(idxEscalation, row),
             hatyjaComments: cellStr(idxHatyjaExtra, row),
             emailCommunications: cellStr(idxEmailComm, row),
@@ -1612,6 +1600,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.showToast('Importing data (Excel 2)…', 'info');
     const reader: FileReader = new FileReader();
     reader.onload = async (e: any) => {
+      this.importInProgress = true;
+      const endImport = () => { this.importInProgress = false; };
       const dataBuffer = e.target.result;
       const wb: XLSX.WorkBook = XLSX.read(dataBuffer, {
         type: 'array',
@@ -1625,16 +1615,15 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       if (!raw.length) {
         this.showToast('Empty file.', 'error');
         event.target.value = null;
+        endImport();
         return;
       }
 
-      // --- Build a reverse lookup: normalised display name → field key ---
       const nameToKey = new Map<string, string>();
       for (const [key, displayName] of Object.entries(this.columnNames)) {
-        nameToKey.set(String(displayName).toLowerCase().trim(), key);
+        nameToKey.set(this.normalizeImportExcel2Header(displayName), key);
       }
 
-      // Add aliases for Excel column names that differ from display names
       nameToKey.set('drmc/compliance qa-1 (meixi)', 'drmcCompliance1');
       nameToKey.set('drmc/compliance qa-1', 'drmcCompliance1');
       nameToKey.set('drmc/compliance qa 1', 'drmcCompliance1');
@@ -1642,6 +1631,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       nameToKey.set('drmc/compliance qa 2', 'drmcCompliance2');
       nameToKey.set('compliance qa-1 (meixi)', 'drmcCompliance1');
       nameToKey.set('compliance qa-2', 'drmcCompliance2');
+      nameToKey.set('hatyja comment', 'hatyjaComments');
+      nameToKey.set('extra hatyja comments', 'hatyjaComments');
 
       // --- Detect header row (first 10 rows) and map column indices to field keys ---
       let headerRowIndex = -1;
@@ -1652,22 +1643,10 @@ export class AppComponent implements AfterViewInit, OnDestroy {
         if (!row || !row.length) continue;
         const tempMap: { idx: number; key: string }[] = [];
         row.forEach((cell: any, idx: number) => {
-          if (!cell) return;
-          const norm = String(cell).toLowerCase().trim();
-          // Exact match first
-          if (nameToKey.has(norm)) {
-            tempMap.push({ idx, key: nameToKey.get(norm)! });
-            return;
-          }
-          // Fuzzy: check if any display name is contained in the cell or vice-versa
-          for (const [dispNorm, key] of nameToKey.entries()) {
-            if (norm.includes(dispNorm) || dispNorm.includes(norm)) {
-              // Avoid duplicates for the same key
-              if (!tempMap.some(m => m.key === key)) {
-                tempMap.push({ idx, key });
-              }
-              return;
-            }
+          const key = this.resolveImportExcel2ColumnKey(cell, nameToKey);
+          if (!key) return;
+          if (!tempMap.some(m => m.key === key)) {
+            tempMap.push({ idx, key });
           }
         });
         if (tempMap.length >= 2) {
@@ -1681,14 +1660,15 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       if (headerRowIndex === -1) {
         this.showToast('Could not detect headers in file.', 'error');
         event.target.value = null;
+        endImport();
         return;
       }
 
-      // Find the applicant column index
       const applicantMapping = colMap.find(m => m.key === 'applicant');
       if (!applicantMapping) {
         this.showToast('No "Applicant" column found in file.', 'error');
         event.target.value = null;
+        endImport();
         return;
       }
 
@@ -1706,8 +1686,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       let errorCount = 0;
       const applicantsToSave = new Set<ApplicantRecord>();
 
-      const cellStr = (idx: number, row: any[]): string =>
-        idx !== -1 && row[idx] !== undefined ? String(row[idx]).trim() : '';
+      const cellStr = (idx: number, row: any[]): string => this.importExcel2CellToString(row, idx);
 
       for (let i = headerRowIndex + 1; i < raw.length; i++) {
         const row = raw[i];
@@ -1719,7 +1698,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
           const applicantName = cellStr(applicantMapping.idx, row);
           if (!applicantName) continue;
 
-          const applicantKey = applicantName.toLowerCase();
+          const applicantKey = applicantName.trim().toLowerCase();
           const existing = existingMap.get(applicantKey);
 
           if (existing) {
@@ -1728,6 +1707,10 @@ export class AppComponent implements AfterViewInit, OnDestroy {
             if (fieldsUpdated.length > 0) {
               updatedCount++;
               applicantsToSave.add(existing);
+              const now = new Date().toISOString();
+              if (existing.id) {
+                this.dirtyApplicantIds.set(existing.id, now);
+              }
               console.log('Excel2 merged', applicantName, '→', fieldsUpdated.join(', '));
             }
           } else {
@@ -1735,7 +1718,12 @@ export class AppComponent implements AfterViewInit, OnDestroy {
             for (const mapping of colMap) {
               if (mapping.key === 'applicant') continue;
               const val = this.importExcel2CellValue(mapping.key, mapping.idx, row, cellStr);
-              if (val !== undefined && val !== null && String(val).trim() !== '') {
+              const isDjDropdown = mapping.key === 'djResult' || mapping.key === 'djTruePositive' || mapping.key === 'djFalsePositive';
+              if (isDjDropdown) {
+                if (!this.isImportExcel2StringFieldEmpty(val)) {
+                  (newRec as any)[mapping.key] = val;
+                }
+              } else if (val !== undefined && val !== null && String(val).trim() !== '') {
                 (newRec as any)[mapping.key] = val;
               }
             }
@@ -1750,26 +1738,103 @@ export class AppComponent implements AfterViewInit, OnDestroy {
         }
       }
 
-      this.dataSource.data = existingData;
-      this.deferFilterCountRefresh();
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(existingData));
+      this.persistDirtyApplicants();
 
       for (const applicant of applicantsToSave) {
         if (!applicant.id) applicant.id = this.generateApplicantId();
         const now = new Date().toISOString();
         this.dirtyApplicantIds.set(applicant.id, now);
         this.persistDirtyApplicants();
-        await this.saveApplicantImmediate(applicant);
+        await this.pushApplicantToFirestore(applicant);
       }
 
-      if (this.paginator) this.paginator.firstPage();
+      this.ngZone.run(() => {
+        this.dataSource.data = [...existingData];
+        this.deferFilterCountRefresh();
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(existingData));
+        if (this.paginator) this.paginator.firstPage();
 
-      const summary = [`${matchCount} matched`, `${updatedCount} updated`, `${newCount} new`];
-      if (errorCount > 0) summary.push(`${errorCount} errors`);
-      this.showToast(`Import 2 done: ${summary.join(', ')}.`, errorCount > 0 ? 'error' : 'success');
-      event.target.value = null;
+        const summary = [`${matchCount} matched`, `${updatedCount} updated`, `${newCount} new`];
+        if (errorCount > 0) summary.push(`${errorCount} errors`);
+        this.showToast(`Import 2 done: ${summary.join(', ')}.`, errorCount > 0 ? 'error' : 'success');
+        event.target.value = null;
+        endImport();
+      });
     };
     reader.readAsArrayBuffer(target.files[0]);
+  }
+
+  private normalizeImportExcel2Header(value: unknown): string {
+    return String(value ?? '')
+      .replace(/\u00a0/g, ' ')
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, ' ');
+  }
+
+  private resolveImportExcel2ColumnKey(cell: unknown, nameToKey: Map<string, string>): string | null {
+    const norm = this.normalizeImportExcel2Header(cell);
+    if (!norm) return null;
+
+    if (nameToKey.has(norm)) return nameToKey.get(norm)!;
+
+    // Mirror importExcel1 rules — review before generic "comments" matching
+    if (norm === 'review' || (norm.includes('hatyja') && norm.includes('review'))) {
+      return 'hatyjaReviewComments';
+    }
+    if (norm.includes('comments') && (norm.includes('hatyja') || norm.includes('extra')) && !norm.includes('review')) {
+      return 'hatyjaComments';
+    }
+    if (norm.includes('email') && norm.includes('comm')) return 'emailCommunications';
+    if (norm.includes('red flag') || norm.includes('red-flag') || (norm.includes('flag') && !norm.includes('country'))) {
+      return 'redFlags';
+    }
+    if (norm.includes('passed') || norm === 'status') return 'passed';
+    if (norm.includes('applicant') || norm === 'name' || norm === 'entity name') return 'applicant';
+    if (norm.includes('acronym') || norm.includes('short name')) return 'acronym';
+    if (norm.includes('entity') && norm.includes('type')) return 'entityType';
+    if (norm.includes('country') && !norm.includes('flag')) return 'country';
+    if (norm.includes('address') || norm.includes('location')) return 'address';
+    if (norm.includes('nol')) return 'nolStatus';
+    if (norm.includes('screening') || norm.includes('pre-')) return 'preScreening';
+    if (norm.includes('profiles') || norm.includes('profile') || norm.includes('draft id') || norm.includes('url')) {
+      return 'profiles';
+    }
+    if (norm.includes('dj-result') || norm.includes('dj result')) return 'djResult';
+    if (norm.includes('report number') || norm.includes('dj report no')) return 'djReportNumber';
+    if (norm.includes('report link') || norm.includes('dj link')) return 'djReportLink';
+    if (norm.includes('true positive')) return 'djTruePositive';
+    if (norm.includes('false positive')) return 'djFalsePositive';
+    if (norm.includes('escalation')) return 'escalationRequired';
+    if ((norm.includes('drmc') || norm.includes('compliance')) && (norm.includes('qa-1') || norm.includes('qa 1') || norm.includes('meixi'))) {
+      return 'drmcCompliance1';
+    }
+    if ((norm.includes('drmc') || norm.includes('compliance')) && (norm.includes('qa-2') || norm.includes('qa 2'))) {
+      return 'drmcCompliance2';
+    }
+
+    let best: { key: string; len: number } | null = null;
+    for (const [dispNorm, key] of nameToKey.entries()) {
+      if (norm.includes(dispNorm) || dispNorm.includes(norm)) {
+        if (!best || dispNorm.length > best.len) {
+          best = { key, len: dispNorm.length };
+        }
+      }
+    }
+    return best?.key ?? null;
+  }
+
+  private importExcel2CellToString(row: any[], idx: number): string {
+    if (idx === -1 || row[idx] === undefined || row[idx] === null) return '';
+    const cell = row[idx];
+    if (cell instanceof Date) {
+      return cell.toISOString();
+    }
+    if (typeof cell === 'object') {
+      const richText = (cell as { text?: string; w?: string }).text ?? (cell as { w?: string }).w;
+      if (richText !== undefined) return String(richText).trim();
+    }
+    return String(cell).trim();
   }
 
   private readonly importExcel2StringMergeFields = new Set<string>([
@@ -1782,8 +1847,35 @@ export class AppComponent implements AfterViewInit, OnDestroy {
 
   private isImportExcel2StringFieldEmpty(value: unknown): boolean {
     if (value === undefined || value === null) return true;
-    if (typeof value === 'string') return value.trim() === '';
-    return false;
+    return String(value).trim() === '';
+  }
+
+  private readonly djResultDropdownOptions = ['Yes', 'No'] as const;
+  private readonly djYesNoNaDropdownOptions = ['Yes', 'No', 'N/A'] as const;
+
+  private normalizeDjDropdownImport(key: string, raw: string): string {
+    const normalized = raw.trim().toLowerCase();
+    if (!normalized) return '';
+
+    if (key === 'djResult') {
+      return this.djResultDropdownOptions.find(o => o.toLowerCase() === normalized) ?? '';
+    }
+    if (key === 'djTruePositive' || key === 'djFalsePositive') {
+      const aliases: Record<string, string> = {
+        yes: 'Yes',
+        no: 'No',
+        'n/a': 'N/A',
+        na: 'N/A',
+        'n.a.': 'N/A'
+      };
+      if (aliases[normalized]) return aliases[normalized];
+      return this.djYesNoNaDropdownOptions.find(o => o.toLowerCase() === normalized) ?? '';
+    }
+    return '';
+  }
+
+  private isDjDropdownFieldEmpty(value: unknown): boolean {
+    return this.isImportExcel2StringFieldEmpty(value);
   }
 
   private mergeImportExcel2IntoExisting(
@@ -1798,7 +1890,11 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       if (!this.importExcel2StringMergeFields.has(mapping.key)) continue;
 
       const existingVal = (existing as any)[mapping.key];
-      if (!this.isImportExcel2StringFieldEmpty(existingVal)) continue;
+      const isDjDropdown = mapping.key === 'djResult' || mapping.key === 'djTruePositive' || mapping.key === 'djFalsePositive';
+      const isEmpty = isDjDropdown
+        ? this.isDjDropdownFieldEmpty(existingVal)
+        : this.isImportExcel2StringFieldEmpty(existingVal);
+      if (!isEmpty) continue;
 
       const importedVal = this.importExcel2CellValue(mapping.key, mapping.idx, row, cellStr);
       if (this.isImportExcel2StringFieldEmpty(importedVal)) continue;
@@ -1830,16 +1926,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
         ? `https://partners.greenclimate.fund/pre-accreditation/${val}/staff/preview`
         : val;
     }
-    if (key === 'djResult') {
-      const raw = cellStr(idx, row).toLowerCase();
-      return raw === 'yes' ? 'Yes' : (raw ? 'No' : '');
-    }
-    if (key === 'djTruePositive' || key === 'djFalsePositive') {
-      const raw = cellStr(idx, row).toLowerCase();
-      if (raw === 'yes') return 'Yes';
-      if (raw === 'no') return 'No';
-      if (raw === 'n/a' || raw === 'na') return 'N/A';
-      return '';
+    if (key === 'djResult' || key === 'djTruePositive' || key === 'djFalsePositive') {
+      return this.normalizeDjDropdownImport(key, cellStr(idx, row));
     }
     return cellStr(idx, row);
   }
