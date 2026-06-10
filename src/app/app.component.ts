@@ -166,8 +166,15 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   editingReviewElement: ApplicantRecord | null = null;
   selectedColumnKeys: string[] = [];
   firestoreConnected = false;
-  private readonly onBrowserOnline = () => this.setupRealtimeSubscription();
-  private readonly onBrowserOffline = () => this.setFirestoreConnected(false);
+  private lastFirestoreErrorToastAt = 0;
+  private readonly onBrowserOnline = () => {
+    this.setupRealtimeSubscription();
+    void this.flushPendingLocalChanges(true);
+  };
+  private readonly onBrowserOffline = () => this.setFirestoreConnected(
+    false,
+    'Connection to Firebase lost. Changes are saved locally only.'
+  );
 
   private get activeRecords(): ApplicantRecord[] {
     return this.dataSource.data.filter(r => !r.archived);
@@ -382,6 +389,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
         if (Array.isArray(parsed) && parsed.length > 0) {
           this.hydrateRecords(parsed);
           this.dataSource.data = parsed;
+          this.restoreDirtyApplicants();
           this.deferFilterCountRefresh();
           this.updateFilter();
           this.showToast(`${parsed.length} records loaded (local cache).`, 'info');
@@ -406,9 +414,16 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     }
   }
 
-  private setFirestoreConnected(connected: boolean) {
+  private setFirestoreConnected(connected: boolean, errorMessage?: string) {
     this.ngZone.run(() => {
       this.firestoreConnected = connected;
+      if (!connected && errorMessage) {
+        const now = Date.now();
+        if (now - this.lastFirestoreErrorToastAt > 3000) {
+          this.lastFirestoreErrorToastAt = now;
+          this.showToast(errorMessage, 'error');
+        }
+      }
     });
   }
 
@@ -434,10 +449,17 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     const kept: ApplicantRecord[] = [];
     for (const record of this.dataSource.data) {
       if (record.id && incomingById.has(record.id)) {
-        Object.assign(record, incomingById.get(record.id)!);
-        kept.push(record);
+        const incoming = incomingById.get(record.id)!;
+        if (this.shouldKeepLocalVersion(record.id, (incoming as any).updatedAt)) {
+          kept.push(record);
+        } else {
+          Object.assign(record, incoming);
+          this.dirtyApplicantIds.delete(record.id);
+          kept.push(record);
+        }
         incomingById.delete(record.id);
       } else if (record.id && !firestoreIds.has(record.id)) {
+        kept.push(record);
         structureChanged = true;
       } else {
         kept.push(record);
@@ -454,9 +476,36 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     } else if (kept.length > 0) {
       this.dataSource.data = [...kept];
     }
+
+    this.persistDirtyApplicants();
+  }
+
+  private shouldKeepLocalVersion(recordId: string, remoteUpdatedAt?: string): boolean {
+    const localDirtyAt = this.dirtyApplicantIds.get(recordId);
+    if (!localDirtyAt) return false;
+    if (!remoteUpdatedAt) return true;
+    return !this.isRemoteNewerThanLocal(remoteUpdatedAt, localDirtyAt);
+  }
+
+  private restoreDirtyApplicants() {
+    const raw = localStorage.getItem(this.DIRTY_APPLICANTS_KEY);
+    if (!raw) return;
+    try {
+      const entries: [string, string][] = JSON.parse(raw);
+      this.dirtyApplicantIds = new Map(entries);
+    } catch { /* ignore corrupt data */ }
+  }
+
+  private persistDirtyApplicants() {
+    localStorage.setItem(
+      this.DIRTY_APPLICANTS_KEY,
+      JSON.stringify([...this.dirtyApplicantIds.entries()])
+    );
   }
 
   private readonly LOCAL_TIMESTAMP_KEY = 'gfc_data_updated_at';
+  private readonly DIRTY_APPLICANTS_KEY = 'gfc_dirty_applicants';
+  private dirtyApplicantIds = new Map<string, string>();
   private unsubscribeFromApplicants: (() => void) | null = null;
   private lastAppliedFilter = '';
 
@@ -473,19 +522,24 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       if (applicants.length > 0) {
         this.hydrateRecords(applicants);
         this.ngZone.run(() => {
-          this.dataSource.data = applicants;
+          if (this.dataSource.data.length > 0) {
+            this.mergeApplicantsFromFirestore(applicants);
+          } else {
+            this.dataSource.data = applicants;
+          }
           this.deferFilterCountRefresh();
           this.updateFilter();
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(applicants));
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(this.dataSource.data));
           this.showToast(`${applicants.length} records synced from cloud.`, 'success');
         });
       }
     } catch (err) {
       console.error('Firestore: initial load failed', err);
-      this.setFirestoreConnected(false);
+      this.setFirestoreConnected(false, 'Could not connect to Firebase.');
     }
 
     this.setupRealtimeSubscription();
+    void this.flushPendingLocalChanges();
   }
 
   private setupRealtimeSubscription() {
@@ -511,7 +565,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
           this.setFirestoreConnected(true);
         }
       },
-      () => this.setFirestoreConnected(false)
+      () => this.setFirestoreConnected(false, 'Firebase sync interrupted.')
     );
   }
 
@@ -868,7 +922,9 @@ export class AppComponent implements AfterViewInit, OnDestroy {
 
   async clearData() {
     localStorage.removeItem(STORAGE_KEY);
-    // Delete all from Firestore
+    localStorage.removeItem(this.DIRTY_APPLICANTS_KEY);
+    localStorage.removeItem(this.LOCAL_TIMESTAMP_KEY);
+    this.dirtyApplicantIds.clear();
     await this.firestoreService.clearAllApplicants();
     this.dataSource.data = [];
     this.deferFilterCountRefresh();
@@ -876,21 +932,23 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
 
   private firestoreSaveTimeout: any = null;
-  private pendingApplicantSave: ApplicantRecord | null = null;
 
   saveToStorage(specificApplicant?: ApplicantRecord) {
     const data = this.dataSource.data;
     const now = new Date().toISOString();
-    // Instant local cache + timestamp
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     localStorage.setItem(this.LOCAL_TIMESTAMP_KEY, now);
 
     if (specificApplicant?.id) {
-      // Save specific applicant individually
-      this.pendingApplicantSave = specificApplicant;
-      clearTimeout(this.firestoreSaveTimeout);
-      this.firestoreSaveTimeout = setTimeout(() => this.savePendingApplicant(), 500);
+      this.dirtyApplicantIds.set(specificApplicant.id, now);
+      this.persistDirtyApplicants();
+      this.scheduleFirestoreSave();
     }
+  }
+
+  private scheduleFirestoreSave() {
+    clearTimeout(this.firestoreSaveTimeout);
+    this.firestoreSaveTimeout = setTimeout(() => this.flushPendingLocalChanges(), 500);
   }
 
   private normalizeApplicantForSave(applicant: ApplicantRecord): any {
@@ -917,34 +975,118 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     return data;
   }
 
-  private async savePendingApplicant() {
-    if (!this.pendingApplicantSave?.id) return;
-    try {
-      const { id, ...rest } = this.pendingApplicantSave;
-      const dataToSave = this.normalizeApplicantForSave(rest as ApplicantRecord);
-      await this.firestoreService.saveApplicant(id, dataToSave);
-      console.log('Firestore: saved applicant', id);
-      this.setFirestoreConnected(true);
-    } catch (err) {
-      console.error('Firestore: save applicant failed', err);
-      this.setFirestoreConnected(false);
-    }
-    this.pendingApplicantSave = null;
-  }
-
-  async saveApplicantImmediate(applicant: ApplicantRecord) {
+  private async pushApplicantToFirestore(
+    applicant: ApplicantRecord
+  ): Promise<'saved' | 'remote_newer' | 'failed'> {
     if (!applicant.id) {
       applicant.id = this.generateApplicantId();
     }
+    const id = applicant.id;
+    const localDirtyAt = this.dirtyApplicantIds.get(id);
+
     try {
-      const { id, ...rest } = applicant;
-      const dataToSave = this.normalizeApplicantForSave(rest as ApplicantRecord);
-      await this.firestoreService.saveApplicant(id, dataToSave);
+      const remote = await this.firestoreService.getApplicant(id);
+      if (remote?.['updatedAt'] && localDirtyAt && this.isRemoteNewerThanLocal(remote['updatedAt'], localDirtyAt)) {
+        this.applyRemoteApplicantToLocal(id, remote);
+        return 'remote_newer';
+      }
+
+      const { id: _, ...rest } = applicant;
+      await this.firestoreService.saveApplicant(id, this.normalizeApplicantForSave(rest as ApplicantRecord));
+      this.dirtyApplicantIds.delete(id);
+      this.persistDirtyApplicants();
+      return 'saved';
+    } catch (err) {
+      console.error('Firestore: save applicant failed', err);
+      return 'failed';
+    }
+  }
+
+  private isRemoteNewerThanLocal(remoteUpdatedAt: string, localDirtyAt: string): boolean {
+    return new Date(remoteUpdatedAt).getTime() > new Date(localDirtyAt).getTime();
+  }
+
+  private applyRemoteApplicantToLocal(id: string, remote: Record<string, any>) {
+    const record = this.dataSource.data.find(r => r.id === id);
+    if (record) {
+      Object.assign(record, { ...remote, id });
+      this.hydrateRecords([record]);
+    }
+    this.dirtyApplicantIds.delete(id);
+    this.persistDirtyApplicants();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(this.dataSource.data));
+  }
+
+  private notifyRemoteVersionKept(count: number) {
+    this.showToast(
+      count === 1
+        ? 'A newer Firebase version was kept; local change was not saved.'
+        : `${count} records kept the newer Firebase version.`,
+      'info'
+    );
+  }
+
+  private async flushPendingLocalChanges(showReconnectToast = false) {
+    if (this.dirtyApplicantIds.size === 0) return;
+
+    const ids = [...this.dirtyApplicantIds.keys()];
+    let synced = 0;
+    let failed = 0;
+    let remoteNewer = 0;
+
+    for (const id of ids) {
+      const record = this.dataSource.data.find(r => r.id === id);
+      if (!record) {
+        this.dirtyApplicantIds.delete(id);
+        continue;
+      }
+      const result = await this.pushApplicantToFirestore(record);
+      if (result === 'saved') synced++;
+      else if (result === 'remote_newer') remoteNewer++;
+      else failed++;
+    }
+
+    if (synced > 0 || remoteNewer > 0) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.dataSource.data));
+    }
+    if (synced > 0) {
+      this.setFirestoreConnected(true);
+      if (showReconnectToast) {
+        this.showToast(
+          synced === 1 ? 'Offline change synced to Firebase.' : `${synced} offline changes synced to Firebase.`,
+          'success'
+        );
+      }
+    }
+    if (remoteNewer > 0) {
+      this.notifyRemoteVersionKept(remoteNewer);
+    }
+    if (failed > 0) {
+      this.setFirestoreConnected(false, 'Failed to save changes to Firebase.');
+    }
+  }
+
+  async saveApplicantImmediate(applicant: ApplicantRecord) {
+    const now = new Date().toISOString();
+    if (!applicant.id) {
+      applicant.id = this.generateApplicantId();
+    }
+    if (!this.dirtyApplicantIds.has(applicant.id)) {
+      this.dirtyApplicantIds.set(applicant.id, now);
+      this.persistDirtyApplicants();
+    }
+
+    const result = await this.pushApplicantToFirestore(applicant);
+    if (result === 'saved') {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(this.dataSource.data));
       this.setFirestoreConnected(true);
-    } catch (err) {
-      console.error('Firestore: immediate save failed', err);
-      this.setFirestoreConnected(false);
+    } else if (result === 'remote_newer') {
+      this.setFirestoreConnected(true);
+      this.notifyRemoteVersionKept(1);
+    } else {
+      this.dirtyApplicantIds.set(applicant.id, now);
+      this.persistDirtyApplicants();
+      this.setFirestoreConnected(false, 'Failed to save changes to Firebase.');
     }
   }
 
@@ -952,7 +1094,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     localStorage.setItem('gfc_column_visibility', JSON.stringify(this.columnVisibility));
     this.firestoreService.saveColumnVisibility(this.columnVisibility)
       .then(() => this.setFirestoreConnected(true))
-      .catch(() => this.setFirestoreConnected(false));
+      .catch(() => this.setFirestoreConnected(false, 'Failed to save column settings to Firebase.'));
   }
 
   // Track the visibility of each column for selective export
@@ -1559,8 +1701,10 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       });
 
       let matchCount = 0;
+      let updatedCount = 0;
       let newCount = 0;
       let errorCount = 0;
+      const applicantsToSave = new Set<ApplicantRecord>();
 
       const cellStr = (idx: number, row: any[]): string =>
         idx !== -1 && row[idx] !== undefined ? String(row[idx]).trim() : '';
@@ -1579,23 +1723,14 @@ export class AppComponent implements AfterViewInit, OnDestroy {
           const existing = existingMap.get(applicantKey);
 
           if (existing) {
-            // Merge: fill only empty fields
-            let fieldsUpdated: string[] = [];
-            for (const mapping of colMap) {
-              if (mapping.key === 'applicant') continue;
-              const importedVal = this.importExcel2CellValue(mapping.key, mapping.idx, row, cellStr);
-              const existingVal = (existing as any)[mapping.key];
-              const isEmpty = existingVal === undefined || existingVal === null || String(existingVal).trim() === '';
-              const hasImport = importedVal !== undefined && importedVal !== null && String(importedVal).trim() !== '';
-              if (isEmpty && hasImport) {
-                (existing as any)[mapping.key] = importedVal;
-                fieldsUpdated.push(mapping.key);
-              }
-            }
-            if (fieldsUpdated.length) console.log('Excel2 merged', applicantName, '→', fieldsUpdated.join(', '));
             matchCount++;
+            const fieldsUpdated = this.mergeImportExcel2IntoExisting(existing, colMap, row, cellStr);
+            if (fieldsUpdated.length > 0) {
+              updatedCount++;
+              applicantsToSave.add(existing);
+              console.log('Excel2 merged', applicantName, '→', fieldsUpdated.join(', '));
+            }
           } else {
-            // New applicant
             const newRec: ApplicantRecord = { id: this.generateApplicantId(), applicant: applicantName } as ApplicantRecord;
             for (const mapping of colMap) {
               if (mapping.key === 'applicant') continue;
@@ -1606,6 +1741,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
             }
             existingData.push(newRec);
             existingMap.set(applicantKey, newRec);
+            applicantsToSave.add(newRec);
             newCount++;
           }
         } catch (err) {
@@ -1618,21 +1754,59 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       this.deferFilterCountRefresh();
       localStorage.setItem(STORAGE_KEY, JSON.stringify(existingData));
 
-      // Save all applicants to Firestore individually
-      for (const applicant of existingData) {
+      for (const applicant of applicantsToSave) {
         if (!applicant.id) applicant.id = this.generateApplicantId();
+        const now = new Date().toISOString();
+        this.dirtyApplicantIds.set(applicant.id, now);
+        this.persistDirtyApplicants();
         await this.saveApplicantImmediate(applicant);
       }
 
       if (this.paginator) this.paginator.firstPage();
 
-      // Show summary toast
-      const summary = [`${matchCount} matched`, `${newCount} new`];
+      const summary = [`${matchCount} matched`, `${updatedCount} updated`, `${newCount} new`];
       if (errorCount > 0) summary.push(`${errorCount} errors`);
       this.showToast(`Import 2 done: ${summary.join(', ')}.`, errorCount > 0 ? 'error' : 'success');
       event.target.value = null;
     };
     reader.readAsArrayBuffer(target.files[0]);
+  }
+
+  private readonly importExcel2StringMergeFields = new Set<string>([
+    'acronym', 'entityType', 'country', 'address', 'nolStatus',
+    'hatyjaReviewComments', 'redFlags', 'passed', 'preScreening', 'profiles',
+    'djResult', 'djReportNumber', 'djReportLink', 'djTruePositive', 'djFalsePositive',
+    'escalationRequired', 'hatyjaComments', 'emailCommunications',
+    'drmcCompliance1', 'drmcCompliance2', 'riskReasons'
+  ]);
+
+  private isImportExcel2StringFieldEmpty(value: unknown): boolean {
+    if (value === undefined || value === null) return true;
+    if (typeof value === 'string') return value.trim() === '';
+    return false;
+  }
+
+  private mergeImportExcel2IntoExisting(
+    existing: ApplicantRecord,
+    colMap: { idx: number; key: string }[],
+    row: any[],
+    cellStr: (idx: number, row: any[]) => string
+  ): string[] {
+    const fieldsUpdated: string[] = [];
+    for (const mapping of colMap) {
+      if (mapping.key === 'applicant') continue;
+      if (!this.importExcel2StringMergeFields.has(mapping.key)) continue;
+
+      const existingVal = (existing as any)[mapping.key];
+      if (!this.isImportExcel2StringFieldEmpty(existingVal)) continue;
+
+      const importedVal = this.importExcel2CellValue(mapping.key, mapping.idx, row, cellStr);
+      if (this.isImportExcel2StringFieldEmpty(importedVal)) continue;
+
+      (existing as any)[mapping.key] = importedVal;
+      fieldsUpdated.push(mapping.key);
+    }
+    return fieldsUpdated;
   }
 
   private importExcel2CellValue(
@@ -1646,7 +1820,9 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     }
     if (key === 'passed') {
       const raw = cellStr(idx, row);
-      return this.validPassedValues.has(raw) ? raw : '';
+      if (!raw) return '';
+      const match = [...this.validPassedValues].find(v => v.toLowerCase() === raw.toLowerCase());
+      return match ?? '';
     }
     if (key === 'profiles') {
       const val = cellStr(idx, row);

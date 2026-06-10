@@ -4,6 +4,7 @@ import {
   collection,
   doc,
   getDoc,
+  getDocFromServer,
   setDoc,
   deleteDoc,
   getDocs,
@@ -29,6 +30,20 @@ export class FirestoreService {
     } catch (err) {
       console.error('Firestore: save applicant error', err);
       throw err;
+    }
+  }
+
+  async getApplicant(id: string): Promise<Record<string, any> | null> {
+    const ref = doc(db, APPLICANTS_COLLECTION, id);
+    try {
+      const snapshot = navigator.onLine ? await getDocFromServer(ref) : await getDoc(ref);
+      return snapshot.exists() ? { id: snapshot.id, ...snapshot.data() } : null;
+    } catch (err) {
+      if (!navigator.onLine) {
+        return null;
+      }
+      const snapshot = await getDoc(ref);
+      return snapshot.exists() ? { id: snapshot.id, ...snapshot.data() } : null;
     }
   }
 
