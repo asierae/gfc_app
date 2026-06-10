@@ -24,7 +24,12 @@ import { FirestoreService } from './firestore.service';
 import { SkillsService } from './services/skills.service';
 import { RiskService } from './services/risk.service';
 import { InvestigationSkill } from './config/skills.config';
-import { REGION_OPTIONS, buildCountryToRegionMap, normalizeCountryName, getRegionByCountry } from './config/countries.config';
+import {
+  REGION_OPTIONS,
+  buildCountryToRegionMap,
+  normalizeCountryName,
+  getRegionByCountry,
+} from './config/countries.config';
 
 export interface ApplicantRecord {
   id?: string;
@@ -110,17 +115,17 @@ const STORAGE_KEY = 'gfc_applicant_data';
     MatChipsModule,
     MatExpansionModule,
     MatTooltipModule,
-    MatMenuModule
+    MatMenuModule,
   ],
   templateUrl: './app.component.html',
-  styleUrls: ['./app.component.css']
+  styleUrls: ['./app.component.css'],
 })
 export class AppComponent implements AfterViewInit, OnDestroy {
   title = 'angular-excel-app';
   displayedColumns: string[] = [];
   dataSource = new MatTableDataSource<ApplicantRecord>(ELEMENT_DATA);
   selection = new SelectionModel<ApplicantRecord>(true, []);
-  
+
   // Filtering properties
   filterText: string = '';
   filterStartDate?: Date | null;
@@ -154,7 +159,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     'Public/Government',
     'Private Sector',
     'Multilateral Organization',
-    'Unknown'
+    'Unknown',
   ];
   entityTypeOptionsWithCount: { value: string; label: string }[] = [];
   readonly regionOptions: string[] = [...REGION_OPTIONS];
@@ -171,13 +176,14 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.setupRealtimeSubscription();
     void this.flushPendingLocalChanges(true);
   };
-  private readonly onBrowserOffline = () => this.setFirestoreConnected(
-    false,
-    'Connection to Firebase lost. Changes are saved locally only.'
-  );
+  private readonly onBrowserOffline = () =>
+    this.setFirestoreConnected(
+      false,
+      'Connection to Firebase lost. Changes are saved locally only.',
+    );
 
   private get activeRecords(): ApplicantRecord[] {
-    return this.dataSource.data.filter(r => !r.archived);
+    return this.dataSource.data.filter((r) => !r.archived);
   }
 
   get stats(): DashboardStats {
@@ -198,16 +204,16 @@ export class AppComponent implements AfterViewInit, OnDestroy {
         pendingPct: 0,
         redFlagsPct: 0,
         topCountriesRedFlags: [],
-        entityTypeCounts: []
+        entityTypeCounts: [],
       };
     }
 
-    const countries = new Set(data.map(d => d.country).filter(c => !!c)).size;
-    const passed = data.filter(d => d.passed === 'Passed').length;
-    const failed = data.filter(d => d.passed === 'Failed').length;
-    const invited = data.filter(d => d.passed === 'Invited').length;
-    const pending = data.filter(d => !d.passed || d.passed === 'Pending').length;
-    const redFlags = data.filter(d => d.redFlags && d.redFlags !== 'None').length;
+    const countries = new Set(data.map((d) => d.country).filter((c) => !!c)).size;
+    const passed = data.filter((d) => d.passed === 'Passed').length;
+    const failed = data.filter((d) => d.passed === 'Failed').length;
+    const invited = data.filter((d) => d.passed === 'Invited').length;
+    const pending = data.filter((d) => !d.passed || d.passed === 'Pending').length;
+    const redFlags = data.filter((d) => d.redFlags && d.redFlags !== 'None').length;
 
     return {
       total,
@@ -223,7 +229,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       pendingPct: Number(((pending / total) * 100).toFixed(3)),
       redFlagsPct: Number(((redFlags / total) * 100).toFixed(3)),
       topCountriesRedFlags: this.getTopCountriesRedFlags(data),
-      entityTypeCounts: this.getEntityTypeCounts(data, total)
+      entityTypeCounts: this.getEntityTypeCounts(data, total),
     };
   }
 
@@ -233,23 +239,24 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     'Public/Government': '#06b6d4',
     'Private Sector': '#f59e0b',
     'Multilateral Organization': '#10b981',
-    'Unknown': '#94a3b8'
+    Unknown: '#94a3b8',
   };
 
   private getTopCountriesRedFlags(data: ApplicantRecord[]) {
     const grouped: Record<string, { total: number; sum: number }> = {};
-    data.filter(d => d.country && d.riskPercent != null)
-      .forEach(d => {
+    data
+      .filter((d) => d.country && d.riskPercent != null)
+      .forEach((d) => {
         if (!grouped[d.country]) grouped[d.country] = { total: 0, sum: 0 };
         grouped[d.country].total++;
         grouped[d.country].sum += d.riskPercent!;
       });
 
     return Object.keys(grouped)
-      .map(name => ({
+      .map((name) => ({
         name,
         count: grouped[name].total,
-        avgRisk: Math.round(grouped[name].sum / grouped[name].total)
+        avgRisk: Math.round(grouped[name].sum / grouped[name].total),
       }))
       .sort((a, b) => b.avgRisk - a.avgRisk)
       .slice(0, 5);
@@ -259,7 +266,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     private ngZone: NgZone,
     private firestoreService: FirestoreService,
     private skillsService: SkillsService,
-    private riskService: RiskService
+    private riskService: RiskService,
   ) {
     this.syncSelectedKeys();
     this.updateDisplayedColumns();
@@ -289,29 +296,47 @@ export class AppComponent implements AfterViewInit, OnDestroy {
           return typeof val === 'string' ? val.toLowerCase() : val || '';
       }
     };
-    
+
     // Set up custom filter predicate
     this.dataSource.filterPredicate = (data: ApplicantRecord, filter: string) => {
-        const defaultTerms = { text: '', region: 'All', entityType: 'All', status: 'All', window: 'All', start: null, end: null, showArchived: false };
-        const searchTerms: { text: string; region: string; entityType: string; status: string; window?: string; start?: Date | null; end?: Date | null; showArchived?: boolean } =
-          (typeof filter === 'string' && filter.trim().startsWith('{'))
-            ? JSON.parse(filter)
-            : defaultTerms;
-      
+      const defaultTerms = {
+        text: '',
+        region: 'All',
+        entityType: 'All',
+        status: 'All',
+        window: 'All',
+        start: null,
+        end: null,
+        showArchived: false,
+      };
+      const searchTerms: {
+        text: string;
+        region: string;
+        entityType: string;
+        status: string;
+        window?: string;
+        start?: Date | null;
+        end?: Date | null;
+        showArchived?: boolean;
+      } =
+        typeof filter === 'string' && filter.trim().startsWith('{')
+          ? JSON.parse(filter)
+          : defaultTerms;
+
       // 1. Text Search (over specific columns)
       const dataStr = (
-        (data.applicant || '') + 
-        (data.acronym || '') + 
-        (data.country || '') + 
+        (data.applicant || '') +
+        (data.acronym || '') +
+        (data.country || '') +
         (data.nolStatus || '')
       ).toLowerCase();
-      
+
       const matchesSearch = dataStr.includes((searchTerms.text || '').toLowerCase());
 
       // 1.5. Region Filter (computed from country field)
       const rowRegion = this.getRegionByCountry(data.country);
       const matchesRegion = this.matchesRegionSelection(rowRegion, searchTerms.region);
-      
+
       // 2. Date Range Filter
       let matchesDate = true;
       if (searchTerms.start || searchTerms.end) {
@@ -319,23 +344,26 @@ export class AppComponent implements AfterViewInit, OnDestroy {
           matchesDate = false;
         } else {
           const subDate = new Date(data.submittedAt);
-          subDate.setHours(0,0,0,0);
-          
+          subDate.setHours(0, 0, 0, 0);
+
           if (searchTerms.start) {
             const start = new Date(searchTerms.start);
-            start.setHours(0,0,0,0);
+            start.setHours(0, 0, 0, 0);
             if (subDate < start) matchesDate = false;
           }
           if (searchTerms.end) {
             const end = new Date(searchTerms.end);
-            end.setHours(0,0,0,0);
+            end.setHours(0, 0, 0, 0);
             if (subDate > end) matchesDate = false;
           }
         }
       }
-      
+
       // 3. Entity Type Filter
-      const matchesEntityType = this.matchesEntityTypeSelection(data.entityType, searchTerms.entityType);
+      const matchesEntityType = this.matchesEntityTypeSelection(
+        data.entityType,
+        searchTerms.entityType,
+      );
 
       // 4. Status Filter (Passed column)
       let matchesStatus = true;
@@ -350,7 +378,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       // 5. Window dropdown filter (exact match)
       let matchesWindow = true;
       if (searchTerms.window && searchTerms.window !== 'All') {
-        const w = (data.window !== undefined && data.window !== null) ? Number((data as any).window) : NaN;
+        const w =
+          data.window !== undefined && data.window !== null ? Number((data as any).window) : NaN;
         matchesWindow = !isNaN(w) && w === parseInt(searchTerms.window, 10);
       }
 
@@ -358,7 +387,15 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       const showArchived = searchTerms.showArchived === true;
       const matchesArchived = showArchived ? isArchived : !isArchived;
 
-      return matchesSearch && matchesRegion && matchesDate && matchesEntityType && matchesStatus && matchesWindow && matchesArchived;
+      return (
+        matchesSearch &&
+        matchesRegion &&
+        matchesDate &&
+        matchesEntityType &&
+        matchesStatus &&
+        matchesWindow &&
+        matchesArchived
+      );
     };
 
     // Restore column visibility from localStorage, then Firestore
@@ -369,9 +406,11 @@ export class AppComponent implements AfterViewInit, OnDestroy {
         this.columnVisibility = { ...this.columnVisibility, ...parsed };
         this.syncSelectedKeys();
         this.updateDisplayedColumns();
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
-    this.firestoreService.loadColumnVisibility().then(parsed => {
+    this.firestoreService.loadColumnVisibility().then((parsed) => {
       if (parsed) {
         this.ngZone.run(() => {
           this.columnVisibility = { ...this.columnVisibility, ...parsed };
@@ -394,7 +433,9 @@ export class AppComponent implements AfterViewInit, OnDestroy {
           this.updateFilter();
           this.showToast(`${parsed.length} records loaded (local cache).`, 'info');
         }
-      } catch { /* ignore corrupt data */ }
+      } catch {
+        /* ignore corrupt data */
+      }
     } else {
       this.updateFilter();
     }
@@ -428,7 +469,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
 
   private hydrateRecords(records: any[]) {
-    records.forEach(record => {
+    records.forEach((record) => {
       if (record.submittedAt) {
         const d = new Date(record.submittedAt);
         if (!isNaN(d.getTime())) record.submittedAt = d;
@@ -444,7 +485,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   private mergeApplicantsFromFirestore(applicants: ApplicantRecord[]) {
     if (this.importInProgress) return;
 
-    const incomingById = new Map(applicants.filter(a => a.id).map(a => [a.id!, a]));
+    const incomingById = new Map(applicants.filter((a) => a.id).map((a) => [a.id!, a]));
     const firestoreIds = new Set(incomingById.keys());
     let structureChanged = false;
 
@@ -495,13 +536,15 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     try {
       const entries: [string, string][] = JSON.parse(raw);
       this.dirtyApplicantIds = new Map(entries);
-    } catch { /* ignore corrupt data */ }
+    } catch {
+      /* ignore corrupt data */
+    }
   }
 
   private persistDirtyApplicants() {
     localStorage.setItem(
       this.DIRTY_APPLICANTS_KEY,
-      JSON.stringify([...this.dirtyApplicantIds.entries()])
+      JSON.stringify([...this.dirtyApplicantIds.entries()]),
     );
   }
 
@@ -514,7 +557,9 @@ export class AppComponent implements AfterViewInit, OnDestroy {
 
   private async loadFromFirestore() {
     try {
-      const migrated = await this.firestoreService.migrateFromLegacy(() => this.generateApplicantId());
+      const migrated = await this.firestoreService.migrateFromLegacy(() =>
+        this.generateApplicantId(),
+      );
       if (migrated > 0) {
         this.showToast(`Migrated ${migrated} records to new format.`, 'success');
       }
@@ -553,7 +598,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
 
     this.unsubscribeFromApplicants = this.firestoreService.subscribeToApplicants(
       (applicants, fromServer) => {
-        applicants.forEach(a => {
+        applicants.forEach((a) => {
           if (!a.id) a.id = this.generateApplicantId();
         });
 
@@ -568,7 +613,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
           this.setFirestoreConnected(true);
         }
       },
-      () => this.setFirestoreConnected(false, 'Firebase sync interrupted.')
+      () => this.setFirestoreConnected(false, 'Firebase sync interrupted.'),
     );
   }
 
@@ -600,11 +645,19 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   private preEditSortState: { active: string; direction: string } | null = null;
   private preEditDataSourceSort: MatSort | null | undefined = null;
 
-  toggleReviewEdit(element: ApplicantRecord, field: 'isEditingReview' | 'isEditingHatyjaComments' | 'isEditingEmailCommunications' | 'isEditingRiskReasons', event: MouseEvent) {
+  toggleReviewEdit(
+    element: ApplicantRecord,
+    field:
+      | 'isEditingReview'
+      | 'isEditingHatyjaComments'
+      | 'isEditingEmailCommunications'
+      | 'isEditingRiskReasons',
+    event: MouseEvent,
+  ) {
     event.stopPropagation();
 
     // First, clear any other editing states in all records to avoid multiple textareas
-    this.dataSource.data.forEach(r => {
+    this.dataSource.data.forEach((r) => {
       r.isEditingReview = false;
       r.isEditingHatyjaComments = false;
       r.isEditingEmailCommunications = false;
@@ -647,7 +700,10 @@ export class AppComponent implements AfterViewInit, OnDestroy {
         }
 
         const availableOnSide = placeBelow ? availableBelow : availableAbove;
-        const popupMaxHeight = Math.max(minHeight, Math.min(maxPreferredHeight, availableOnSide || minHeight));
+        const popupMaxHeight = Math.max(
+          minHeight,
+          Math.min(maxPreferredHeight, availableOnSide || minHeight),
+        );
 
         textarea.style.maxHeight = `${popupMaxHeight}px`;
         textarea.style.overflowY = 'auto';
@@ -709,7 +765,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       window: this.filterWindow,
       start: this.filterStartDate,
       end: this.filterEndDate,
-      showArchived: this.showArchived
+      showArchived: this.showArchived,
     };
     const filterStr = JSON.stringify(filterValue);
     const filterChanged = filterStr !== this.lastAppliedFilter;
@@ -787,7 +843,6 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   onWindowFilterChange() {
     this.updateFilter();
   }
-  
 
   private getRegionByCountry(country?: string): string {
     return getRegionByCountry(country || '', this.countryToRegionMap);
@@ -799,12 +854,14 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
 
   private getRegionCounts(): Record<string, number> {
-    const rowRegions = this.getFilterCountSource().map(record => this.getRegionByCountry(record.country));
+    const rowRegions = this.getFilterCountSource().map((record) =>
+      this.getRegionByCountry(record.country),
+    );
     const counts: Record<string, number> = {};
 
-    this.regionOptions.forEach(regionOption => {
-      counts[regionOption] = rowRegions.filter(rowRegion =>
-        this.matchesRegionSelection(rowRegion, regionOption)
+    this.regionOptions.forEach((regionOption) => {
+      counts[regionOption] = rowRegions.filter((rowRegion) =>
+        this.matchesRegionSelection(rowRegion, regionOption),
       ).length;
     });
 
@@ -813,9 +870,9 @@ export class AppComponent implements AfterViewInit, OnDestroy {
 
   private refreshRegionOptionsWithCount() {
     const counts = this.getRegionCounts();
-    this.regionOptionsWithCount = this.regionOptions.map(region => ({
+    this.regionOptionsWithCount = this.regionOptions.map((region) => ({
       value: region,
-      label: `${region} (${counts[region] ?? 0})`
+      label: `${region} (${counts[region] ?? 0})`,
     }));
   }
 
@@ -824,14 +881,18 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     const val = entityType.toLowerCase().trim();
     if (val.includes('un') && val.includes('system')) return 'UN System Entity';
     if (val.includes('un-system')) return 'UN System Entity';
-    if (val.includes('government-controlled') || val.includes('government controlled')) return 'Public/Government-Controlled';
-    if (val.includes('public') && val.includes('government') && val.includes('controlled')) return 'Public/Government-Controlled';
+    if (val.includes('government-controlled') || val.includes('government controlled'))
+      return 'Public/Government-Controlled';
+    if (val.includes('public') && val.includes('government') && val.includes('controlled'))
+      return 'Public/Government-Controlled';
     if (val.includes('public') && val.includes('government')) return 'Public/Government';
     if (val === 'public/government' || val === 'public-government') return 'Public/Government';
     if (val.includes('private') || val.includes('sector')) return 'Private Sector';
-    if (val.includes('multilateral') || val.includes('organization')) return 'Multilateral Organization';
+    if (val.includes('multilateral') || val.includes('organization'))
+      return 'Multilateral Organization';
     if (val.includes('non-profit') || val.includes('nonprofit')) return 'Multilateral Organization';
-    if (val.includes('corporation') || val.includes('llc') || val.includes('partnership')) return 'Private Sector';
+    if (val.includes('corporation') || val.includes('llc') || val.includes('partnership'))
+      return 'Private Sector';
     return 'Unknown';
   }
 
@@ -840,27 +901,34 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     return this.normalizeEntityType(entityType) === selectedType;
   }
 
-  private getEntityTypeCounts(data: ApplicantRecord[], total: number): { name: string; count: number; pct: number }[] {
+  private getEntityTypeCounts(
+    data: ApplicantRecord[],
+    total: number,
+  ): { name: string; count: number; pct: number }[] {
     const counts: Record<string, number> = {};
-    data.forEach(d => {
+    data.forEach((d) => {
       const normalized = this.normalizeEntityType(d.entityType);
       counts[normalized] = (counts[normalized] || 0) + 1;
     });
     return Object.keys(counts)
-      .map(name => ({ name, count: counts[name], pct: total > 0 ? Number(((counts[name] / total) * 100).toFixed(1)) : 0 }))
+      .map((name) => ({
+        name,
+        count: counts[name],
+        pct: total > 0 ? Number(((counts[name] / total) * 100).toFixed(1)) : 0,
+      }))
       .sort((a, b) => b.count - a.count);
   }
 
   private getFilterCountSource(): ApplicantRecord[] {
-    return this.showArchived
-      ? this.dataSource.data.filter(r => r.archived)
-      : this.activeRecords;
+    return this.showArchived ? this.dataSource.data.filter((r) => r.archived) : this.activeRecords;
   }
 
   private getEntityTypeCounts2(): Record<string, number> {
     const counts: Record<string, number> = {};
-    this.entityTypeOptions.forEach(opt => { counts[opt] = 0; });
-    this.getFilterCountSource().forEach(record => {
+    this.entityTypeOptions.forEach((opt) => {
+      counts[opt] = 0;
+    });
+    this.getFilterCountSource().forEach((record) => {
       const normalized = this.normalizeEntityType(record.entityType);
       counts[normalized] = (counts[normalized] || 0) + 1;
       counts['All'] = (counts['All'] || 0) + 1;
@@ -870,35 +938,38 @@ export class AppComponent implements AfterViewInit, OnDestroy {
 
   private refreshEntityTypeOptionsWithCount() {
     const counts = this.getEntityTypeCounts2();
-    this.entityTypeOptionsWithCount = this.entityTypeOptions.map(opt => ({
+    this.entityTypeOptionsWithCount = this.entityTypeOptions.map((opt) => ({
       value: opt,
-      label: `${opt} (${counts[opt] ?? 0})`
+      label: `${opt} (${counts[opt] ?? 0})`,
     }));
   }
 
   private refreshStatusOptionsWithCount() {
     const data = this.getFilterCountSource();
     const counts: Record<string, number> = { All: data.length };
-    data.forEach(d => {
+    data.forEach((d) => {
       if (d.passed === 'Passed') counts['Passed'] = (counts['Passed'] || 0) + 1;
       else if (d.passed === 'Failed') counts['Failed'] = (counts['Failed'] || 0) + 1;
       else if (d.passed === 'Invited') counts['Invited'] = (counts['Invited'] || 0) + 1;
       else counts['Pending'] = (counts['Pending'] || 0) + 1;
     });
-    this.statusOptionsWithCount = this.statusOptions.map(opt => ({
+    this.statusOptionsWithCount = this.statusOptions.map((opt) => ({
       value: opt,
-      label: `${opt} (${counts[opt] ?? 0})`
+      label: `${opt} (${counts[opt] ?? 0})`,
     }));
   }
 
   private refreshWindowOptionsWithCount() {
     const data = this.getFilterCountSource();
     const counts: Record<string, number> = { All: data.length };
-    data.forEach(d => {
+    data.forEach((d) => {
       const w = String(d.window ?? '');
       if (w) counts[w] = (counts[w] || 0) + 1;
     });
-    this.windowOptionsWithCount = this.windowOptions.map(opt => ({ value: opt, label: `${opt} (${counts[opt] ?? 0})` }));
+    this.windowOptionsWithCount = this.windowOptions.map((opt) => ({
+      value: opt,
+      label: `${opt} (${counts[opt] ?? 0})`,
+    }));
   }
 
   private deferFilterCountRefresh() {
@@ -910,20 +981,53 @@ export class AppComponent implements AfterViewInit, OnDestroy {
 
   // ── Toast Notifications ──────────────────────────────────────
   toast: { message: string; type: 'success' | 'error' | 'info'; visible: boolean } = {
-    message: '', type: 'info', visible: false
+    message: '',
+    type: 'info',
+    visible: false,
   };
   private toastTimer: any;
 
   showToast(message: string, type: 'success' | 'error' | 'info') {
     clearTimeout(this.toastTimer);
     this.toast = { message, type, visible: true };
-    this.toastTimer = setTimeout(() => { this.toast.visible = false; }, 2500);
+    this.toastTimer = setTimeout(() => {
+      this.toast.visible = false;
+    }, 2500);
   }
 
-  dismissToast() { this.toast.visible = false; }
+  dismissToast() {
+    this.toast.visible = false;
+  }
   // ────────────────────────────────────────────────────────────────
 
+  showClearConfirm = false;
+  clearCountdown = 5;
+  private clearCountdownTimer: any = null;
+
+  openClearConfirm() {
+    this.showClearConfirm = true;
+    this.clearCountdown = 5;
+    this.clearCountdownTimer = setInterval(() => {
+      this.clearCountdown--;
+      if (this.clearCountdown <= 0) {
+        clearInterval(this.clearCountdownTimer);
+        this.clearCountdownTimer = null;
+      }
+    }, 1000);
+  }
+
+  cancelClearConfirm() {
+    this.showClearConfirm = false;
+    clearInterval(this.clearCountdownTimer);
+    this.clearCountdownTimer = null;
+    this.clearCountdown = 5;
+  }
+
   async clearData() {
+    this.showClearConfirm = false;
+    clearInterval(this.clearCountdownTimer);
+    this.clearCountdownTimer = null;
+    this.clearCountdown = 5;
     localStorage.removeItem(STORAGE_KEY);
     localStorage.removeItem(this.DIRTY_APPLICANTS_KEY);
     localStorage.removeItem(this.LOCAL_TIMESTAMP_KEY);
@@ -979,7 +1083,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
 
   private async pushApplicantToFirestore(
-    applicant: ApplicantRecord
+    applicant: ApplicantRecord,
   ): Promise<'saved' | 'remote_newer' | 'failed'> {
     if (!applicant.id) {
       applicant.id = this.generateApplicantId();
@@ -989,13 +1093,20 @@ export class AppComponent implements AfterViewInit, OnDestroy {
 
     try {
       const remote = await this.firestoreService.getApplicant(id);
-      if (remote?.['updatedAt'] && localDirtyAt && this.isRemoteNewerThanLocal(remote['updatedAt'], localDirtyAt)) {
+      if (
+        remote?.['updatedAt'] &&
+        localDirtyAt &&
+        this.isRemoteNewerThanLocal(remote['updatedAt'], localDirtyAt)
+      ) {
         this.applyRemoteApplicantToLocal(id, remote);
         return 'remote_newer';
       }
 
       const { id: _, ...rest } = applicant;
-      await this.firestoreService.saveApplicant(id, this.normalizeApplicantForSave(rest as ApplicantRecord));
+      await this.firestoreService.saveApplicant(
+        id,
+        this.normalizeApplicantForSave(rest as ApplicantRecord),
+      );
       this.dirtyApplicantIds.delete(id);
       this.persistDirtyApplicants();
       return 'saved';
@@ -1010,7 +1121,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
 
   private applyRemoteApplicantToLocal(id: string, remote: Record<string, any>) {
-    const record = this.dataSource.data.find(r => r.id === id);
+    const record = this.dataSource.data.find((r) => r.id === id);
     if (record) {
       Object.assign(record, { ...remote, id });
       this.hydrateRecords([record]);
@@ -1025,7 +1136,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       count === 1
         ? 'A newer Firebase version was kept; local change was not saved.'
         : `${count} records kept the newer Firebase version.`,
-      'info'
+      'info',
     );
   }
 
@@ -1038,7 +1149,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     let remoteNewer = 0;
 
     for (const id of ids) {
-      const record = this.dataSource.data.find(r => r.id === id);
+      const record = this.dataSource.data.find((r) => r.id === id);
       if (!record) {
         this.dirtyApplicantIds.delete(id);
         continue;
@@ -1056,8 +1167,10 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       this.setFirestoreConnected(true);
       if (showReconnectToast) {
         this.showToast(
-          synced === 1 ? 'Offline change synced to Firebase.' : `${synced} offline changes synced to Firebase.`,
-          'success'
+          synced === 1
+            ? 'Offline change synced to Firebase.'
+            : `${synced} offline changes synced to Firebase.`,
+          'success',
         );
       }
     }
@@ -1095,9 +1208,12 @@ export class AppComponent implements AfterViewInit, OnDestroy {
 
   saveColumnVisibility() {
     localStorage.setItem('gfc_column_visibility', JSON.stringify(this.columnVisibility));
-    this.firestoreService.saveColumnVisibility(this.columnVisibility)
+    this.firestoreService
+      .saveColumnVisibility(this.columnVisibility)
       .then(() => this.setFirestoreConnected(true))
-      .catch(() => this.setFirestoreConnected(false, 'Failed to save column settings to Firebase.'));
+      .catch(() =>
+        this.setFirestoreConnected(false, 'Failed to save column settings to Firebase.'),
+      );
   }
 
   // Track the visibility of each column for selective export
@@ -1125,31 +1241,32 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     hatyjaComments: true,
     emailCommunications: true,
     riskPercent: true,
-    riskReasons: true
-    ,
+    riskReasons: true,
     window: true,
-    invited: true
+    invited: true,
   };
 
   updateDisplayedColumns() {
-    this.displayedColumns = ['select', ...this.columnKeys.filter(key => (this.columnVisibility as any)[key])];
+    this.displayedColumns = [
+      'select',
+      ...this.columnKeys.filter((key) => (this.columnVisibility as any)[key]),
+    ];
   }
 
-
   syncSelectedKeys() {
-    this.selectedColumnKeys = this.columnKeys.filter(key => (this.columnVisibility as any)[key]);
+    this.selectedColumnKeys = this.columnKeys.filter((key) => (this.columnVisibility as any)[key]);
   }
 
   onColumnSelectionChange() {
     // Ensure `selectedColumnKeys` follow the canonical `columnKeys` order
-    this.selectedColumnKeys = this.columnKeys.filter(k => this.selectedColumnKeys.includes(k));
+    this.selectedColumnKeys = this.columnKeys.filter((k) => this.selectedColumnKeys.includes(k));
 
     // Reset all to false first
-    Object.keys(this.columnVisibility).forEach(key => {
+    Object.keys(this.columnVisibility).forEach((key) => {
       (this.columnVisibility as any)[key] = false;
     });
     // Set selected to true (in ordered sequence)
-    this.selectedColumnKeys.forEach(key => {
+    this.selectedColumnKeys.forEach((key) => {
       (this.columnVisibility as any)[key] = true;
     });
     this.updateDisplayedColumns();
@@ -1157,17 +1274,38 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
 
   removeColumn(key: string) {
-    this.selectedColumnKeys = this.selectedColumnKeys.filter(k => k !== key);
+    this.selectedColumnKeys = this.selectedColumnKeys.filter((k) => k !== key);
     this.onColumnSelectionChange();
   }
 
   // Helper arrays for UI presentation
   columnKeys = [
-    'applicant', 'acronym', 'passed', 'window', 'invited', 'entityType',
-    'submittedAt', 'preScreening', 'profiles',
-    'country', 'address', 'nolStatus', 'hatyjaReviewComments', 'emailCommunications', 'redFlags',
-    'djResult', 'djReportNumber', 'djReportLink', 'djTruePositive', 'djFalsePositive', 'escalationRequired', 'hatyjaComments',
-    'drmcCompliance1', 'drmcCompliance2', 'riskPercent', 'riskReasons'
+    'applicant',
+    'acronym',
+    'passed',
+    'window',
+    'invited',
+    'entityType',
+    'submittedAt',
+    'preScreening',
+    'profiles',
+    'country',
+    'address',
+    'nolStatus',
+    'hatyjaReviewComments',
+    'emailCommunications',
+    'redFlags',
+    'djResult',
+    'djReportNumber',
+    'djReportLink',
+    'djTruePositive',
+    'djFalsePositive',
+    'escalationRequired',
+    'hatyjaComments',
+    'drmcCompliance1',
+    'drmcCompliance2',
+    'riskPercent',
+    'riskReasons',
   ];
   columnNames: { [key: string]: string } = {
     applicant: 'Applicant',
@@ -1193,16 +1331,15 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     hatyjaComments: 'Hatyja comments',
     emailCommunications: 'Email Communications',
     riskPercent: 'Risk %',
-    riskReasons: 'Reasons'
-    ,
+    riskReasons: 'Reasons',
     window: 'Window',
-    invited: 'Invited'
+    invited: 'Invited',
   };
 
   // Selection helpers
   isAllSelected() {
     const visible = this.dataSource.filteredData;
-    return visible.length > 0 && visible.every(row => this.selection.isSelected(row));
+    return visible.length > 0 && visible.every((row) => this.selection.isSelected(row));
   }
 
   setStatus(element: ApplicantRecord, status: string) {
@@ -1220,7 +1357,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     if (this.isAllSelected()) {
       this.selection.clear();
     } else {
-      visible.forEach(row => this.selection.select(row));
+      visible.forEach((row) => this.selection.select(row));
     }
   }
 
@@ -1264,7 +1401,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     }
 
     const data = this.dataSource.data;
-    const newData = data.filter(row => !this.selection.isSelected(row));
+    const newData = data.filter((row) => !this.selection.isSelected(row));
     this.dataSource.data = newData;
     this.deferFilterCountRefresh();
     this.selection.clear();
@@ -1281,9 +1418,9 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       return;
     }
 
-    const dataToExport = rows.map(row => {
+    const dataToExport = rows.map((row) => {
       const exportRow: Record<string, unknown> = {};
-      this.columnKeys.forEach(key => {
+      this.columnKeys.forEach((key) => {
         if (!selectedOnly || (this.columnVisibility as any)[key]) {
           exportRow[this.columnNames[key]] = (row as any)[key];
         }
@@ -1292,14 +1429,12 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     });
 
     const worksheet: XLSX.WorkSheet = XLSX.utils.json_to_sheet(dataToExport);
-    const workbook: XLSX.WorkBook = { Sheets: { 'data': worksheet }, SheetNames: ['data'] };
+    const workbook: XLSX.WorkBook = { Sheets: { data: worksheet }, SheetNames: ['data'] };
     const suffix = selectedOnly ? 'Selected' : 'Export';
     XLSX.writeFile(workbook, `ApplicantData_${suffix}.xlsx`);
     this.showToast(
-      selectedOnly
-        ? `${rows.length} selected row(s) exported.`
-        : 'Excel exported successfully!',
-      'success'
+      selectedOnly ? `${rows.length} selected row(s) exported.` : 'Excel exported successfully!',
+      'success',
     );
   }
 
@@ -1309,38 +1444,43 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       this.showToast('Select at least one row to copy.', 'error');
       return;
     }
-    const columns = this.columnKeys.filter(key => (this.columnVisibility as any)[key]);
+    const columns = this.columnKeys.filter((key) => (this.columnVisibility as any)[key]);
 
     // Create headers row
-    const headers = columns.map(key => this.columnNames[key]).join('\t');
+    const headers = columns.map((key) => this.columnNames[key]).join('\t');
 
     // Create data rowshatyja comments and reviews in blue
-    const rows = data.map(row => {
-      return columns.map(key => {
-        let val = (row as any)[key];
-        // Clean values for spreadsheet (remove newlines in reviews/addresses)
-        if (typeof val === 'string') {
-          val = val.replace(/\r?\n|\r/g, ' ');
-        }
-        return val || '';
-      }).join('\t');
+    const rows = data.map((row) => {
+      return columns
+        .map((key) => {
+          let val = (row as any)[key];
+          // Clean values for spreadsheet (remove newlines in reviews/addresses)
+          if (typeof val === 'string') {
+            val = val.replace(/\r?\n|\r/g, ' ');
+          }
+          return val || '';
+        })
+        .join('\t');
     });
 
     const tsv = [headers, ...rows].join('\n');
 
-    navigator.clipboard.writeText(tsv).then(() => {
-      const msg = selectedOnly
-        ? `${data.length} selected row(s) copied to clipboard.`
-        : 'Copied to clipboard! You can now paste into Excel.';
-      this.showToast(msg, 'success');
-    }).catch(err => {
-      this.showToast('Failed to copy to clipboard.', 'error');
-      console.error('Clipboard error:', err);
-    });
+    navigator.clipboard
+      .writeText(tsv)
+      .then(() => {
+        const msg = selectedOnly
+          ? `${data.length} selected row(s) copied to clipboard.`
+          : 'Copied to clipboard! You can now paste into Excel.';
+        this.showToast(msg, 'success');
+      })
+      .catch((err) => {
+        this.showToast('Failed to copy to clipboard.', 'error');
+        console.error('Clipboard error:', err);
+      });
   }
 
   async importExcel(event: any): Promise<void> {
-    const target: DataTransfer = <DataTransfer>(event.target);
+    const target: DataTransfer = <DataTransfer>event.target;
     if (target.files.length !== 1) {
       this.showToast('Please select a single file.', 'error');
       return;
@@ -1353,7 +1493,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
         type: 'array',
         cellDates: true,
         cellText: false,
-        cellNF: true
+        cellNF: true,
       });
 
       const wsname: string = wb.SheetNames[0];
@@ -1364,7 +1504,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
 
       let existingData = [...this.dataSource.data];
       const existingMap = new Map<string, ApplicantRecord>();
-      existingData.forEach(r => {
+      existingData.forEach((r) => {
         const key = (r.applicant || '').trim().toLowerCase();
         if (key) existingMap.set(key, r);
       });
@@ -1374,10 +1514,28 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       if (importedData.length > 0) {
         // En lugar de asumir que la fila 0 es la cabecera, buscamos cuál fila contiene las cabeceras reales
         let headerRowIndex = 0;
-        let idxApp = -1, idxAcronym = -1, idxType = -1, idxCountry = -1, idxAddress = -1, idxNol = -1, idxReview = -1, idxFlags = -1, idxPassed = -1;
-        let idxSubmitted = -1, idxPreScreen = -1, idxProfiles = -1;
-        let idxDjResult = -1, idxDjNumber = -1, idxDjLink = -1, idxDjTrue = -1, idxDjFalse = -1, idxEscalation = -1, idxHatyjaExtra = -1, idxEmailComm = -1;
-        let idxDrmc1 = -1, idxDrmc2 = -1;
+        let idxApp = -1,
+          idxAcronym = -1,
+          idxType = -1,
+          idxCountry = -1,
+          idxAddress = -1,
+          idxNol = -1,
+          idxReview = -1,
+          idxFlags = -1,
+          idxPassed = -1;
+        let idxSubmitted = -1,
+          idxPreScreen = -1,
+          idxProfiles = -1;
+        let idxDjResult = -1,
+          idxDjNumber = -1,
+          idxDjLink = -1,
+          idxDjTrue = -1,
+          idxDjFalse = -1,
+          idxEscalation = -1,
+          idxHatyjaExtra = -1,
+          idxEmailComm = -1;
+        let idxDrmc1 = -1,
+          idxDrmc2 = -1;
         let foundHeaders = false;
 
         for (let i = 0; i < importedData.length && i < 10; i++) {
@@ -1385,10 +1543,28 @@ export class AppComponent implements AfterViewInit, OnDestroy {
           if (!row || !row.length) continue;
 
           let matches = 0;
-          let tempIdxApp = -1, tempIdxAcronym = -1, tempIdxType = -1, tempIdxCountry = -1, tempIdxAddress = -1, tempIdxNol = -1, tempIdxReview = -1, tempIdxFlags = -1, tempIdxPassed = -1;
-          let tempIdxSub = -1, tempIdxPre = -1, tempIdxProf = -1;
-          let tempIdxDjRes = -1, tempIdxDjNum = -1, tempIdxDjLnk = -1, tempIdxDjT = -1, tempIdxDjF = -1, tempIdxEsc = -1, tempIdxHatX = -1, tempIdxEmailComm = -1;
-          let tempIdxDrmc1 = -1, tempIdxDrmc2 = -1;
+          let tempIdxApp = -1,
+            tempIdxAcronym = -1,
+            tempIdxType = -1,
+            tempIdxCountry = -1,
+            tempIdxAddress = -1,
+            tempIdxNol = -1,
+            tempIdxReview = -1,
+            tempIdxFlags = -1,
+            tempIdxPassed = -1;
+          let tempIdxSub = -1,
+            tempIdxPre = -1,
+            tempIdxProf = -1;
+          let tempIdxDjRes = -1,
+            tempIdxDjNum = -1,
+            tempIdxDjLnk = -1,
+            tempIdxDjT = -1,
+            tempIdxDjF = -1,
+            tempIdxEsc = -1,
+            tempIdxHatX = -1,
+            tempIdxEmailComm = -1;
+          let tempIdxDrmc1 = -1,
+            tempIdxDrmc2 = -1;
 
           const headerCells = row.map((c: any, idx: number) => `[${idx}]="${c}"`).join(', ');
           console.log('Row', i, 'headers:', headerCells);
@@ -1396,39 +1572,123 @@ export class AppComponent implements AfterViewInit, OnDestroy {
           row.forEach((col: any, index: number) => {
             if (!col) return;
             const colName = String(col).toLowerCase().trim();
-            if (colName.includes('applicant') || colName === 'name' || colName === 'entity name') { tempIdxApp = index; matches++; }
-            else if (colName.includes('acronym') || colName.includes('short name')) { tempIdxAcronym = index; matches++; }
-            else if (colName.includes('entity') || colName.includes('type')) { tempIdxType = index; matches++; }
-            else if (colName.includes('country') && !colName.includes('flag')) { tempIdxCountry = index; matches++; }
-            else if (colName.includes('address') || colName.includes('location')) { tempIdxAddress = index; matches++; }
-            else if (colName.includes('nol')) { tempIdxNol = index; matches++; }
-            else if (colName === 'review' || (colName.includes('hatyja') && colName.includes('review'))) { tempIdxReview = index; matches++; }
-            else if (colName.includes('red flag') || colName.includes('red-flag') || (colName.includes('flag') && !colName.includes('country'))) { tempIdxFlags = index; matches++; }
-            else if (colName.includes('passed') || colName.includes('status')) { tempIdxPassed = index; matches++; }
-            else if (colName.includes('submit') || colName.includes('subm') || colName.includes('date') || colName.includes('time') || colName.includes('create') || colName.includes('regist') || colName.includes('enviado') || colName.includes('fecha') || colName === 'at') { 
-              tempIdxSub = index; 
-              matches++; 
+            if (colName.includes('applicant') || colName === 'name' || colName === 'entity name') {
+              tempIdxApp = index;
+              matches++;
+            } else if (colName.includes('acronym') || colName.includes('short name')) {
+              tempIdxAcronym = index;
+              matches++;
+            } else if (colName.includes('entity') || colName.includes('type')) {
+              tempIdxType = index;
+              matches++;
+            } else if (colName.includes('country') && !colName.includes('flag')) {
+              tempIdxCountry = index;
+              matches++;
+            } else if (colName.includes('address') || colName.includes('location')) {
+              tempIdxAddress = index;
+              matches++;
+            } else if (colName.includes('nol')) {
+              tempIdxNol = index;
+              matches++;
+            } else if (
+              colName === 'review' ||
+              (colName.includes('hatyja') && colName.includes('review'))
+            ) {
+              tempIdxReview = index;
+              matches++;
+            } else if (
+              colName.includes('red flag') ||
+              colName.includes('red-flag') ||
+              (colName.includes('flag') && !colName.includes('country'))
+            ) {
+              tempIdxFlags = index;
+              matches++;
+            } else if (colName.includes('passed') || colName.includes('status')) {
+              tempIdxPassed = index;
+              matches++;
+            } else if (
+              colName.includes('submit') ||
+              colName.includes('subm') ||
+              colName.includes('date') ||
+              colName.includes('time') ||
+              colName.includes('create') ||
+              colName.includes('regist') ||
+              colName.includes('enviado') ||
+              colName.includes('fecha') ||
+              colName === 'at'
+            ) {
+              tempIdxSub = index;
+              matches++;
+            } else if (colName.includes('screening') || colName.includes('pre-')) {
+              tempIdxPre = index;
+              matches++;
+            } else if (colName.includes('dj-result') || colName.includes('dj result')) {
+              tempIdxDjRes = index;
+              matches++;
+            } else if (colName.includes('report number') || colName.includes('dj report no')) {
+              tempIdxDjNum = index;
+              matches++;
+            } else if (colName.includes('report link') || colName.includes('dj link')) {
+              tempIdxDjLnk = index;
+              matches++;
+            } else if (
+              colName.includes('profiles') ||
+              colName.includes('profile') ||
+              colName.includes('draft id') ||
+              colName.includes('draft_id') ||
+              colName.includes('url')
+            ) {
+              tempIdxProf = index;
+              matches++;
+            } else if (colName.includes('true positive')) {
+              tempIdxDjT = index;
+              matches++;
+            } else if (colName.includes('false positive')) {
+              tempIdxDjF = index;
+              matches++;
+            } else if (colName.includes('escalation')) {
+              tempIdxEsc = index;
+              matches++;
+            } else if (colName.includes('email') && colName.includes('comm')) {
+              tempIdxEmailComm = index;
+              matches++;
+            } else if (
+              colName.includes('comments') &&
+              (colName.includes('hatyja') || colName.includes('extra'))
+            ) {
+              tempIdxHatX = index;
+              matches++;
+            } else if (
+              (colName.includes('drmc') || colName.includes('compliance')) &&
+              (colName.includes('qa-1') ||
+                colName.includes('qa 1') ||
+                colName.includes('1') ||
+                colName.includes('meixi'))
+            ) {
+              tempIdxDrmc1 = index;
+              matches++;
+            } else if (
+              (colName.includes('drmc') || colName.includes('compliance')) &&
+              (colName.includes('qa-2') || colName.includes('qa 2') || colName.includes('2'))
+            ) {
+              tempIdxDrmc2 = index;
+              matches++;
             }
-            else if (colName.includes('screening') || colName.includes('pre-')) { tempIdxPre = index; matches++; }
-            else if (colName.includes('dj-result') || colName.includes('dj result')) { tempIdxDjRes = index; matches++; }
-            else if (colName.includes('report number') || colName.includes('dj report no')) { tempIdxDjNum = index; matches++; }
-            else if (colName.includes('report link') || colName.includes('dj link')) { tempIdxDjLnk = index; matches++; }
-            else if (colName.includes('profiles') || colName.includes('profile') || colName.includes('draft id') || colName.includes('draft_id') || colName.includes('url')) { tempIdxProf = index; matches++; }
-            else if (colName.includes('true positive')) { tempIdxDjT = index; matches++; }
-            else if (colName.includes('false positive')) { tempIdxDjF = index; matches++; }
-            else if (colName.includes('escalation')) { tempIdxEsc = index; matches++; }
-            else if (colName.includes('email') && colName.includes('comm')) { tempIdxEmailComm = index; matches++; }
-            else if (colName.includes('comments') && (colName.includes('hatyja') || colName.includes('extra'))) { tempIdxHatX = index; matches++; }
-            else if ((colName.includes('drmc') || colName.includes('compliance')) && (colName.includes('qa-1') || colName.includes('qa 1') || colName.includes('1') || colName.includes('meixi'))) { tempIdxDrmc1 = index; matches++; }
-            else if ((colName.includes('drmc') || colName.includes('compliance')) && (colName.includes('qa-2') || colName.includes('qa 2') || colName.includes('2'))) { tempIdxDrmc2 = index; matches++; }
           });
 
           if (matches >= 2) {
             console.log('--- HEADER FOUND AT ROW', i, '---');
-            console.log('Indices:', { applicant: tempIdxApp, acronym: tempIdxAcronym, type: tempIdxType, country: tempIdxCountry, submitted: tempIdxSub });
-            
-            if (tempIdxSub === -1) console.warn('WARNING: Submitted column NOT found in this row headers.');
-            
+            console.log('Indices:', {
+              applicant: tempIdxApp,
+              acronym: tempIdxAcronym,
+              type: tempIdxType,
+              country: tempIdxCountry,
+              submitted: tempIdxSub,
+            });
+
+            if (tempIdxSub === -1)
+              console.warn('WARNING: Submitted column NOT found in this row headers.');
+
             idxApp = tempIdxApp !== -1 ? tempIdxApp : idxApp;
             idxAcronym = tempIdxAcronym !== -1 ? tempIdxAcronym : idxAcronym;
             idxType = tempIdxType !== -1 ? tempIdxType : idxType;
@@ -1466,7 +1726,9 @@ export class AppComponent implements AfterViewInit, OnDestroy {
         for (let i = headerRowIndex + 1; i < importedData.length; i++) {
           const row = importedData[i];
           if (!row || !row.length) continue;
-          const hasData = row.some((cell: any) => cell !== undefined && cell !== null && String(cell).trim() !== '');
+          const hasData = row.some(
+            (cell: any) => cell !== undefined && cell !== null && String(cell).trim() !== '',
+          );
           if (!hasData) continue;
 
           const rawDate = idxSubmitted !== -1 ? row[idxSubmitted] : undefined;
@@ -1493,20 +1755,26 @@ export class AppComponent implements AfterViewInit, OnDestroy {
             preScreening: cellStr(idxPreScreen, row),
             profiles: (() => {
               const val = cellStr(idxProfiles, row);
-              return (val && !val.startsWith('http'))
+              return val && !val.startsWith('http')
                 ? `https://partners.greenclimate.fund/pre-accreditation/${val}/staff/preview`
                 : val;
             })(),
             djResult: this.normalizeDjDropdownImport('djResult', cellStr(idxDjResult, row)),
             djReportNumber: cellStr(idxDjNumber, row),
             djReportLink: cellStr(idxDjLink, row),
-            djTruePositive: this.normalizeDjDropdownImport('djTruePositive', cellStr(idxDjTrue, row)),
-            djFalsePositive: this.normalizeDjDropdownImport('djFalsePositive', cellStr(idxDjFalse, row)),
+            djTruePositive: this.normalizeDjDropdownImport(
+              'djTruePositive',
+              cellStr(idxDjTrue, row),
+            ),
+            djFalsePositive: this.normalizeDjDropdownImport(
+              'djFalsePositive',
+              cellStr(idxDjFalse, row),
+            ),
             escalationRequired: cellStr(idxEscalation, row),
             hatyjaComments: cellStr(idxHatyjaExtra, row),
             emailCommunications: cellStr(idxEmailComm, row),
             drmcCompliance1: cellStr(idxDrmc1, row),
-            drmcCompliance2: cellStr(idxDrmc2, row)
+            drmcCompliance2: cellStr(idxDrmc2, row),
           };
 
           const applicantKey = (importedRow.applicant || '').toLowerCase();
@@ -1516,18 +1784,39 @@ export class AppComponent implements AfterViewInit, OnDestroy {
             // Merge: only fill columns that are currently empty in the existing record
             let changed = false;
             const mergeFields: (keyof ApplicantRecord)[] = [
-              'acronym', 'entityType', 'country', 'address', 'nolStatus',
-              'hatyjaReviewComments', 'emailCommunications', 'redFlags', 'passed',
-              'submittedAt', 'preScreening', 'profiles',
-              'djResult', 'djReportNumber', 'djReportLink',
-              'djTruePositive', 'djFalsePositive', 'escalationRequired', 'hatyjaComments',
-              'drmcCompliance1', 'drmcCompliance2'
+              'acronym',
+              'entityType',
+              'country',
+              'address',
+              'nolStatus',
+              'hatyjaReviewComments',
+              'emailCommunications',
+              'redFlags',
+              'passed',
+              'submittedAt',
+              'preScreening',
+              'profiles',
+              'djResult',
+              'djReportNumber',
+              'djReportLink',
+              'djTruePositive',
+              'djFalsePositive',
+              'escalationRequired',
+              'hatyjaComments',
+              'drmcCompliance1',
+              'drmcCompliance2',
             ];
             for (const field of mergeFields) {
               const existingVal = (existing as any)[field];
               const importedVal = (importedRow as any)[field];
-              const isEmpty = existingVal === undefined || existingVal === null || String(existingVal).trim() === '';
-              const hasImport = importedVal !== undefined && importedVal !== null && String(importedVal).trim() !== '';
+              const isEmpty =
+                existingVal === undefined ||
+                existingVal === null ||
+                String(existingVal).trim() === '';
+              const hasImport =
+                importedVal !== undefined &&
+                importedVal !== null &&
+                String(importedVal).trim() !== '';
               if (isEmpty && hasImport) {
                 (existing as any)[field] = importedVal;
                 changed = true;
@@ -1559,7 +1848,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
               hatyjaComments: importedRow.hatyjaComments || '',
               emailCommunications: importedRow.emailCommunications || '',
               drmcCompliance1: importedRow.drmcCompliance1 || '',
-              drmcCompliance2: importedRow.drmcCompliance2 || ''
+              drmcCompliance2: importedRow.drmcCompliance2 || '',
             };
             existingData.push(newRec);
             existingMap.set(applicantKey, newRec);
@@ -1585,14 +1874,19 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       const parts: string[] = [];
       if (addedCount > 0) parts.push(`${addedCount} new`);
       if (updatedCount > 0) parts.push(`${updatedCount} updated`);
-      this.showToast(parts.length ? `Import done: ${parts.join(', ')} records.` : 'No changes — all data already up to date.', parts.length ? 'success' : 'info');
+      this.showToast(
+        parts.length
+          ? `Import done: ${parts.join(', ')} records.`
+          : 'No changes — all data already up to date.',
+        parts.length ? 'success' : 'info',
+      );
       event.target.value = null;
     };
     reader.readAsArrayBuffer(target.files[0]);
   }
 
   async importExcel2(event: any): Promise<void> {
-    const target: DataTransfer = <DataTransfer>(event.target);
+    const target: DataTransfer = <DataTransfer>event.target;
     if (target.files.length !== 1) {
       this.showToast('Please select a single file.', 'error');
       return;
@@ -1601,13 +1895,15 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     const reader: FileReader = new FileReader();
     reader.onload = async (e: any) => {
       this.importInProgress = true;
-      const endImport = () => { this.importInProgress = false; };
+      const endImport = () => {
+        this.importInProgress = false;
+      };
       const dataBuffer = e.target.result;
       const wb: XLSX.WorkBook = XLSX.read(dataBuffer, {
         type: 'array',
         cellDates: true,
         cellText: false,
-        cellNF: true
+        cellNF: true,
       });
       const ws: XLSX.WorkSheet = wb.Sheets[wb.SheetNames[0]];
       const raw: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1 });
@@ -1645,7 +1941,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
         row.forEach((cell: any, idx: number) => {
           const key = this.resolveImportExcel2ColumnKey(cell, nameToKey);
           if (!key) return;
-          if (!tempMap.some(m => m.key === key)) {
+          if (!tempMap.some((m) => m.key === key)) {
             tempMap.push({ idx, key });
           }
         });
@@ -1664,7 +1960,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
         return;
       }
 
-      const applicantMapping = colMap.find(m => m.key === 'applicant');
+      const applicantMapping = colMap.find((m) => m.key === 'applicant');
       if (!applicantMapping) {
         this.showToast('No "Applicant" column found in file.', 'error');
         event.target.value = null;
@@ -1675,7 +1971,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       // Build existing map
       const existingData = [...this.dataSource.data];
       const existingMap = new Map<string, ApplicantRecord>();
-      existingData.forEach(rec => {
+      existingData.forEach((rec) => {
         const k = (rec.applicant || '').trim().toLowerCase();
         if (k) existingMap.set(k, rec);
       });
@@ -1691,7 +1987,9 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       for (let i = headerRowIndex + 1; i < raw.length; i++) {
         const row = raw[i];
         if (!row || !row.length) continue;
-        const hasData = row.some((c: any) => c !== undefined && c !== null && String(c).trim() !== '');
+        const hasData = row.some(
+          (c: any) => c !== undefined && c !== null && String(c).trim() !== '',
+        );
         if (!hasData) continue;
 
         try {
@@ -1703,7 +2001,12 @@ export class AppComponent implements AfterViewInit, OnDestroy {
 
           if (existing) {
             matchCount++;
-            const fieldsUpdated = this.mergeImportExcel2IntoExisting(existing, colMap, row, cellStr);
+            const fieldsUpdated = this.mergeImportExcel2IntoExisting(
+              existing,
+              colMap,
+              row,
+              cellStr,
+            );
             if (fieldsUpdated.length > 0) {
               updatedCount++;
               applicantsToSave.add(existing);
@@ -1714,11 +2017,17 @@ export class AppComponent implements AfterViewInit, OnDestroy {
               console.log('Excel2 merged', applicantName, '→', fieldsUpdated.join(', '));
             }
           } else {
-            const newRec: ApplicantRecord = { id: this.generateApplicantId(), applicant: applicantName } as ApplicantRecord;
+            const newRec: ApplicantRecord = {
+              id: this.generateApplicantId(),
+              applicant: applicantName,
+            } as ApplicantRecord;
             for (const mapping of colMap) {
               if (mapping.key === 'applicant') continue;
               const val = this.importExcel2CellValue(mapping.key, mapping.idx, row, cellStr);
-              const isDjDropdown = mapping.key === 'djResult' || mapping.key === 'djTruePositive' || mapping.key === 'djFalsePositive';
+              const isDjDropdown =
+                mapping.key === 'djResult' ||
+                mapping.key === 'djTruePositive' ||
+                mapping.key === 'djFalsePositive';
               if (isDjDropdown) {
                 if (!this.isImportExcel2StringFieldEmpty(val)) {
                   (newRec as any)[mapping.key] = val;
@@ -1756,7 +2065,10 @@ export class AppComponent implements AfterViewInit, OnDestroy {
 
         const summary = [`${matchCount} matched`, `${updatedCount} updated`, `${newCount} new`];
         if (errorCount > 0) summary.push(`${errorCount} errors`);
-        this.showToast(`Import 2 done: ${summary.join(', ')}.`, errorCount > 0 ? 'error' : 'success');
+        this.showToast(
+          `Import 2 done: ${summary.join(', ')}.`,
+          errorCount > 0 ? 'error' : 'success',
+        );
         event.target.value = null;
         endImport();
       });
@@ -1772,7 +2084,10 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       .replace(/\s+/g, ' ');
   }
 
-  private resolveImportExcel2ColumnKey(cell: unknown, nameToKey: Map<string, string>): string | null {
+  private resolveImportExcel2ColumnKey(
+    cell: unknown,
+    nameToKey: Map<string, string>,
+  ): string | null {
     const norm = this.normalizeImportExcel2Header(cell);
     if (!norm) return null;
 
@@ -1782,11 +2097,19 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     if (norm === 'review' || (norm.includes('hatyja') && norm.includes('review'))) {
       return 'hatyjaReviewComments';
     }
-    if (norm.includes('comments') && (norm.includes('hatyja') || norm.includes('extra')) && !norm.includes('review')) {
+    if (
+      norm.includes('comments') &&
+      (norm.includes('hatyja') || norm.includes('extra')) &&
+      !norm.includes('review')
+    ) {
       return 'hatyjaComments';
     }
     if (norm.includes('email') && norm.includes('comm')) return 'emailCommunications';
-    if (norm.includes('red flag') || norm.includes('red-flag') || (norm.includes('flag') && !norm.includes('country'))) {
+    if (
+      norm.includes('red flag') ||
+      norm.includes('red-flag') ||
+      (norm.includes('flag') && !norm.includes('country'))
+    ) {
       return 'redFlags';
     }
     if (norm.includes('passed') || norm === 'status') return 'passed';
@@ -1797,7 +2120,12 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     if (norm.includes('address') || norm.includes('location')) return 'address';
     if (norm.includes('nol')) return 'nolStatus';
     if (norm.includes('screening') || norm.includes('pre-')) return 'preScreening';
-    if (norm.includes('profiles') || norm.includes('profile') || norm.includes('draft id') || norm.includes('url')) {
+    if (
+      norm.includes('profiles') ||
+      norm.includes('profile') ||
+      norm.includes('draft id') ||
+      norm.includes('url')
+    ) {
       return 'profiles';
     }
     if (norm.includes('dj-result') || norm.includes('dj result')) return 'djResult';
@@ -1806,10 +2134,16 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     if (norm.includes('true positive')) return 'djTruePositive';
     if (norm.includes('false positive')) return 'djFalsePositive';
     if (norm.includes('escalation')) return 'escalationRequired';
-    if ((norm.includes('drmc') || norm.includes('compliance')) && (norm.includes('qa-1') || norm.includes('qa 1') || norm.includes('meixi'))) {
+    if (
+      (norm.includes('drmc') || norm.includes('compliance')) &&
+      (norm.includes('qa-1') || norm.includes('qa 1') || norm.includes('meixi'))
+    ) {
       return 'drmcCompliance1';
     }
-    if ((norm.includes('drmc') || norm.includes('compliance')) && (norm.includes('qa-2') || norm.includes('qa 2'))) {
+    if (
+      (norm.includes('drmc') || norm.includes('compliance')) &&
+      (norm.includes('qa-2') || norm.includes('qa 2'))
+    ) {
       return 'drmcCompliance2';
     }
 
@@ -1838,11 +2172,27 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
 
   private readonly importExcel2StringMergeFields = new Set<string>([
-    'acronym', 'entityType', 'country', 'address', 'nolStatus',
-    'hatyjaReviewComments', 'redFlags', 'passed', 'preScreening', 'profiles',
-    'djResult', 'djReportNumber', 'djReportLink', 'djTruePositive', 'djFalsePositive',
-    'escalationRequired', 'hatyjaComments', 'emailCommunications',
-    'drmcCompliance1', 'drmcCompliance2', 'riskReasons'
+    'acronym',
+    'entityType',
+    'country',
+    'address',
+    'nolStatus',
+    'hatyjaReviewComments',
+    'redFlags',
+    'passed',
+    'preScreening',
+    'profiles',
+    'djResult',
+    'djReportNumber',
+    'djReportLink',
+    'djTruePositive',
+    'djFalsePositive',
+    'escalationRequired',
+    'hatyjaComments',
+    'emailCommunications',
+    'drmcCompliance1',
+    'drmcCompliance2',
+    'riskReasons',
   ]);
 
   private isImportExcel2StringFieldEmpty(value: unknown): boolean {
@@ -1858,7 +2208,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     if (!normalized) return '';
 
     if (key === 'djResult') {
-      return this.djResultDropdownOptions.find(o => o.toLowerCase() === normalized) ?? '';
+      return this.djResultDropdownOptions.find((o) => o.toLowerCase() === normalized) ?? '';
     }
     if (key === 'djTruePositive' || key === 'djFalsePositive') {
       const aliases: Record<string, string> = {
@@ -1866,10 +2216,10 @@ export class AppComponent implements AfterViewInit, OnDestroy {
         no: 'No',
         'n/a': 'N/A',
         na: 'N/A',
-        'n.a.': 'N/A'
+        'n.a.': 'N/A',
       };
       if (aliases[normalized]) return aliases[normalized];
-      return this.djYesNoNaDropdownOptions.find(o => o.toLowerCase() === normalized) ?? '';
+      return this.djYesNoNaDropdownOptions.find((o) => o.toLowerCase() === normalized) ?? '';
     }
     return '';
   }
@@ -1882,7 +2232,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     existing: ApplicantRecord,
     colMap: { idx: number; key: string }[],
     row: any[],
-    cellStr: (idx: number, row: any[]) => string
+    cellStr: (idx: number, row: any[]) => string,
   ): string[] {
     const fieldsUpdated: string[] = [];
     for (const mapping of colMap) {
@@ -1890,7 +2240,10 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       if (!this.importExcel2StringMergeFields.has(mapping.key)) continue;
 
       const existingVal = (existing as any)[mapping.key];
-      const isDjDropdown = mapping.key === 'djResult' || mapping.key === 'djTruePositive' || mapping.key === 'djFalsePositive';
+      const isDjDropdown =
+        mapping.key === 'djResult' ||
+        mapping.key === 'djTruePositive' ||
+        mapping.key === 'djFalsePositive';
       const isEmpty = isDjDropdown
         ? this.isDjDropdownFieldEmpty(existingVal)
         : this.isImportExcel2StringFieldEmpty(existingVal);
@@ -1909,7 +2262,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     key: string,
     idx: number,
     row: any[],
-    cellStr: (idx: number, row: any[]) => string
+    cellStr: (idx: number, row: any[]) => string,
   ): any {
     if (key === 'submittedAt') {
       return this.parseImportedDate(row[idx]);
@@ -1917,12 +2270,12 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     if (key === 'passed') {
       const raw = cellStr(idx, row);
       if (!raw) return '';
-      const match = [...this.validPassedValues].find(v => v.toLowerCase() === raw.toLowerCase());
+      const match = [...this.validPassedValues].find((v) => v.toLowerCase() === raw.toLowerCase());
       return match ?? '';
     }
     if (key === 'profiles') {
       const val = cellStr(idx, row);
-      return (val && !val.startsWith('http'))
+      return val && !val.startsWith('http')
         ? `https://partners.greenclimate.fund/pre-accreditation/${val}/staff/preview`
         : val;
     }
@@ -1963,7 +2316,10 @@ export class AppComponent implements AfterViewInit, OnDestroy {
 
   // --- Risk Calculation ---
   promptForGeminiKey(): string | null {
-    const key = prompt('Enter your Gemini API Key.\nIt will be saved locally in your browser.', this.geminiApiKey || '');
+    const key = prompt(
+      'Enter your Gemini API Key.\nIt will be saved locally in your browser.',
+      this.geminiApiKey || '',
+    );
     if (key !== null && key.trim()) {
       this.geminiApiKey = key.trim();
       localStorage.setItem(this.GEMINI_KEY_STORAGE, this.geminiApiKey);
@@ -1987,13 +2343,14 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     // Ask for corrections when recalculating (existing riskPercent)
     let userCorrection = '';
     if (element.riskPercent != null) {
-      userCorrection = window.prompt(
-        `Recalculating risk for "${element.applicant}".\n\nCurrent risk: ${element.riskPercent}%\n\n` +
-        `If you want to help guide the analysis, enter corrections or additional context below:\n` +
-        `(e.g., "website is actually example.org not example.com", "ignore results from 2015")\n\n` +
-        `Leave empty to recalculate without changes:`,
-        ''
-      ) || '';
+      userCorrection =
+        window.prompt(
+          `Recalculating risk for "${element.applicant}".\n\nCurrent risk: ${element.riskPercent}%\n\n` +
+            `If you want to help guide the analysis, enter corrections or additional context below:\n` +
+            `(e.g., "website is actually example.org not example.com", "ignore results from 2015")\n\n` +
+            `Leave empty to recalculate without changes:`,
+          '',
+        ) || '';
     }
 
     element.isCalculatingRisk = true;
@@ -2002,7 +2359,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       const result = await this.riskService.calculateRisk(
         element,
         this.investigationSkills,
-        userCorrection || undefined
+        userCorrection || undefined,
       );
 
       this.ngZone.run(() => {
@@ -2010,7 +2367,10 @@ export class AppComponent implements AfterViewInit, OnDestroy {
         element.riskReasons = result.riskReasons;
         element.isCalculatingRisk = false;
         this.saveToStorage(element);
-        this.showToast(`Risk calculated for ${element.applicant}: ${element.riskPercent}%`, 'success');
+        this.showToast(
+          `Risk calculated for ${element.applicant}: ${element.riskPercent}%`,
+          'success',
+        );
       });
     } catch (err: any) {
       console.error('Risk calculation error:', err);
@@ -2032,14 +2392,21 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     }
   }
 
-  parseReasons(reasons: string | undefined): { text: string; type: 'positive' | 'negative' | 'neutral' }[] {
+  parseReasons(
+    reasons: string | undefined,
+  ): { text: string; type: 'positive' | 'negative' | 'neutral' }[] {
     if (!reasons) return [];
-    return reasons.split('\n').filter(l => l.trim()).map(line => {
-      const trimmed = line.trim();
-      if (trimmed.startsWith('[+]')) return { text: trimmed.substring(3).trim(), type: 'positive' as const };
-      if (trimmed.startsWith('[-]')) return { text: trimmed.substring(3).trim(), type: 'negative' as const };
-      return { text: trimmed, type: 'neutral' as const };
-    });
+    return reasons
+      .split('\n')
+      .filter((l) => l.trim())
+      .map((line) => {
+        const trimmed = line.trim();
+        if (trimmed.startsWith('[+]'))
+          return { text: trimmed.substring(3).trim(), type: 'positive' as const };
+        if (trimmed.startsWith('[-]'))
+          return { text: trimmed.substring(3).trim(), type: 'negative' as const };
+        return { text: trimmed, type: 'neutral' as const };
+      });
   }
 
   private parseImportedDate(val: any): Date | undefined {
