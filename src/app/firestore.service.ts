@@ -42,27 +42,26 @@ export class FirestoreService {
   }
 
   async loadAllApplicants(): Promise<any[]> {
-    try {
-      const q = query(collection(db, APPLICANTS_COLLECTION));
-      const snapshot = await getDocs(q);
-      return snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-    } catch (err) {
-      console.warn('Firestore: load all applicants failed', err);
-      return [];
-    }
+    const q = query(collection(db, APPLICANTS_COLLECTION));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
   }
 
   /**
    * Subscribe to real-time updates for all applicants
    * Returns unsubscribe function
    */
-  subscribeToApplicants(onUpdate: (applicants: any[]) => void): Unsubscribe {
+  subscribeToApplicants(
+    onUpdate: (applicants: any[], fromServer: boolean) => void,
+    onError?: (err: Error) => void
+  ): Unsubscribe {
     const q = query(collection(db, APPLICANTS_COLLECTION));
     return onSnapshot(q, (snapshot) => {
       const applicants = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-      onUpdate(applicants);
+      onUpdate(applicants, !snapshot.metadata.fromCache);
     }, (err) => {
       console.error('Firestore: subscription error', err);
+      onError?.(err);
     });
   }
 

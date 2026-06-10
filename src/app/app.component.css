@@ -11,6 +11,26 @@
   flex: 1 1 auto;
 }
 
+.firebase-status-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  margin-left: 14px;
+  flex-shrink: 0;
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  transition: background-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.firebase-status-dot--online {
+  background-color: #22c55e;
+  box-shadow: 0 0 10px rgba(34, 197, 94, 0.75);
+}
+
+.firebase-status-dot--offline {
+  background-color: #ef4444;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.75);
+}
+
 .main-container {
   padding: 24px;
   width: 100%;

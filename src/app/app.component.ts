@@ -1,4 +1,4 @@
-import { Component, ViewChild, AfterViewInit, NgZone } from '@angular/core';
+import { Component, ViewChild, AfterViewInit, OnDestroy, NgZone } from '@angular/core';
 import { SelectionModel } from '@angular/cdk/collections';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -115,7 +115,7 @@ const STORAGE_KEY = 'gfc_applicant_data';
   templateUrl: './app.component.html',
   styleUrls: ['./app.component.css']
 })
-export class AppComponent implements AfterViewInit {
+export class AppComponent implements AfterViewInit, OnDestroy {
   title = 'angular-excel-app';
   displayedColumns: string[] = [];
   dataSource = new MatTableDataSource<ApplicantRecord>(ELEMENT_DATA);
@@ -165,6 +165,9 @@ export class AppComponent implements AfterViewInit {
   @ViewChild(MatSort) sort!: MatSort;
   editingReviewElement: ApplicantRecord | null = null;
   selectedColumnKeys: string[] = [];
+  firestoreConnected = false;
+  private readonly onBrowserOnline = () => this.setupRealtimeSubscription();
+  private readonly onBrowserOffline = () => this.setFirestoreConnected(false);
 
   private get activeRecords(): ApplicantRecord[] {
     return this.dataSource.data.filter(r => !r.archived);
@@ -390,6 +393,23 @@ export class AppComponent implements AfterViewInit {
 
     // Then load from Firestore (source of truth)
     this.loadFromFirestore();
+
+    window.addEventListener('online', this.onBrowserOnline);
+    window.addEventListener('offline', this.onBrowserOffline);
+  }
+
+  ngOnDestroy() {
+    window.removeEventListener('online', this.onBrowserOnline);
+    window.removeEventListener('offline', this.onBrowserOffline);
+    if (this.unsubscribeFromApplicants) {
+      this.unsubscribeFromApplicants();
+    }
+  }
+
+  private setFirestoreConnected(connected: boolean) {
+    this.ngZone.run(() => {
+      this.firestoreConnected = connected;
+    });
   }
 
   private hydrateRecords(records: any[]) {
@@ -405,31 +425,66 @@ export class AppComponent implements AfterViewInit {
     });
   }
 
+  /** Merge Firestore updates in place so pagination and sort position are preserved. */
+  private mergeApplicantsFromFirestore(applicants: ApplicantRecord[]) {
+    const incomingById = new Map(applicants.filter(a => a.id).map(a => [a.id!, a]));
+    const firestoreIds = new Set(incomingById.keys());
+    let structureChanged = false;
+
+    const kept: ApplicantRecord[] = [];
+    for (const record of this.dataSource.data) {
+      if (record.id && incomingById.has(record.id)) {
+        Object.assign(record, incomingById.get(record.id)!);
+        kept.push(record);
+        incomingById.delete(record.id);
+      } else if (record.id && !firestoreIds.has(record.id)) {
+        structureChanged = true;
+      } else {
+        kept.push(record);
+      }
+    }
+
+    if (incomingById.size > 0) {
+      structureChanged = true;
+      kept.push(...incomingById.values());
+    }
+
+    if (structureChanged) {
+      this.dataSource.data = kept;
+    } else if (kept.length > 0) {
+      this.dataSource.data = [...kept];
+    }
+  }
+
   private readonly LOCAL_TIMESTAMP_KEY = 'gfc_data_updated_at';
   private unsubscribeFromApplicants: (() => void) | null = null;
+  private lastAppliedFilter = '';
 
   private async loadFromFirestore() {
-    // First, try to migrate from legacy format (single document with array)
-    const migrated = await this.firestoreService.migrateFromLegacy(() => this.generateApplicantId());
-    if (migrated > 0) {
-      this.showToast(`Migrated ${migrated} records to new format.`, 'success');
+    try {
+      const migrated = await this.firestoreService.migrateFromLegacy(() => this.generateApplicantId());
+      if (migrated > 0) {
+        this.showToast(`Migrated ${migrated} records to new format.`, 'success');
+      }
+
+      const applicants = await this.firestoreService.loadAllApplicants();
+      this.setFirestoreConnected(true);
+
+      if (applicants.length > 0) {
+        this.hydrateRecords(applicants);
+        this.ngZone.run(() => {
+          this.dataSource.data = applicants;
+          this.deferFilterCountRefresh();
+          this.updateFilter();
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(applicants));
+          this.showToast(`${applicants.length} records synced from cloud.`, 'success');
+        });
+      }
+    } catch (err) {
+      console.error('Firestore: initial load failed', err);
+      this.setFirestoreConnected(false);
     }
 
-    // Load all applicants from Firestore
-    const applicants = await this.firestoreService.loadAllApplicants();
-
-    if (applicants.length > 0) {
-      this.hydrateRecords(applicants);
-      this.ngZone.run(() => {
-        this.dataSource.data = applicants;
-        this.deferFilterCountRefresh();
-        this.updateFilter();
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(applicants));
-        this.showToast(`${applicants.length} records synced from cloud.`, 'success');
-      });
-    }
-
-    // Subscribe to real-time updates
     this.setupRealtimeSubscription();
   }
 
@@ -439,20 +494,25 @@ export class AppComponent implements AfterViewInit {
       this.unsubscribeFromApplicants();
     }
 
-    this.unsubscribeFromApplicants = this.firestoreService.subscribeToApplicants((applicants) => {
-      // Ensure all have IDs
-      applicants.forEach(a => {
-        if (!a.id) a.id = this.generateApplicantId();
-      });
+    this.unsubscribeFromApplicants = this.firestoreService.subscribeToApplicants(
+      (applicants, fromServer) => {
+        applicants.forEach(a => {
+          if (!a.id) a.id = this.generateApplicantId();
+        });
 
-      this.hydrateRecords(applicants);
-      this.ngZone.run(() => {
-        this.dataSource.data = applicants;
-        this.deferFilterCountRefresh();
-        this.updateFilter();
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(applicants));
-      });
-    });
+        this.hydrateRecords(applicants);
+        this.ngZone.run(() => {
+          this.mergeApplicantsFromFirestore(applicants);
+          this.deferFilterCountRefresh();
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(this.dataSource.data));
+        });
+
+        if (fromServer || navigator.onLine) {
+          this.setFirestoreConnected(true);
+        }
+      },
+      () => this.setFirestoreConnected(false)
+    );
   }
 
   // Column resizing: runs OUTSIDE Angular zone for performance
@@ -594,9 +654,12 @@ export class AppComponent implements AfterViewInit {
       end: this.filterEndDate,
       showArchived: this.showArchived
     };
-    this.dataSource.filter = JSON.stringify(filterValue);
+    const filterStr = JSON.stringify(filterValue);
+    const filterChanged = filterStr !== this.lastAppliedFilter;
+    this.lastAppliedFilter = filterStr;
+    this.dataSource.filter = filterStr;
 
-    if (this.dataSource.paginator) {
+    if (filterChanged && this.dataSource.paginator) {
       this.dataSource.paginator.firstPage();
     }
   }
@@ -861,8 +924,10 @@ export class AppComponent implements AfterViewInit {
       const dataToSave = this.normalizeApplicantForSave(rest as ApplicantRecord);
       await this.firestoreService.saveApplicant(id, dataToSave);
       console.log('Firestore: saved applicant', id);
+      this.setFirestoreConnected(true);
     } catch (err) {
       console.error('Firestore: save applicant failed', err);
+      this.setFirestoreConnected(false);
     }
     this.pendingApplicantSave = null;
   }
@@ -876,14 +941,18 @@ export class AppComponent implements AfterViewInit {
       const dataToSave = this.normalizeApplicantForSave(rest as ApplicantRecord);
       await this.firestoreService.saveApplicant(id, dataToSave);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(this.dataSource.data));
+      this.setFirestoreConnected(true);
     } catch (err) {
       console.error('Firestore: immediate save failed', err);
+      this.setFirestoreConnected(false);
     }
   }
 
   saveColumnVisibility() {
     localStorage.setItem('gfc_column_visibility', JSON.stringify(this.columnVisibility));
-    this.firestoreService.saveColumnVisibility(this.columnVisibility);
+    this.firestoreService.saveColumnVisibility(this.columnVisibility)
+      .then(() => this.setFirestoreConnected(true))
+      .catch(() => this.setFirestoreConnected(false));
   }
 
   // Track the visibility of each column for selective export

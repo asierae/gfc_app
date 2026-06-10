@@ -23,6 +23,14 @@
     <mat-icon>download</mat-icon>
     Export Full Table
   </button>
+  <span
+    class="firebase-status-dot"
+    [class.firebase-status-dot--online]="firestoreConnected"
+    [class.firebase-status-dot--offline]="!firestoreConnected"
+    [matTooltip]="firestoreConnected ? 'Connected to Firebase' : 'Firebase disconnected or save error'"
+    matTooltipPosition="below"
+    aria-label="Firebase connection status">
+  </span>
 </mat-toolbar>
 
 <!-- Toast Notification -->
