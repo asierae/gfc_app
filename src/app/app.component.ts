@@ -1488,6 +1488,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.showToast('Importing data…', 'info');
     const reader: FileReader = new FileReader();
     reader.onload = async (e: any) => {
+      this.importInProgress = true;
       const dataBuffer = e.target.result;
       const wb: XLSX.WorkBook = XLSX.read(dataBuffer, {
         type: 'array',
@@ -1857,30 +1858,35 @@ export class AppComponent implements AfterViewInit, OnDestroy {
         }
       }
 
-      this.dataSource.data = existingData;
-      this.deferFilterCountRefresh();
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(existingData));
-
       // Save all applicants to Firestore individually
       for (const applicant of existingData) {
         if (!applicant.id) applicant.id = this.generateApplicantId();
         await this.saveApplicantImmediate(applicant);
       }
 
-      console.log('Final Records Sample:', existingData[0]);
-      if (this.paginator) {
-        this.paginator.firstPage();
-      }
-      const parts: string[] = [];
-      if (addedCount > 0) parts.push(`${addedCount} new`);
-      if (updatedCount > 0) parts.push(`${updatedCount} updated`);
-      this.showToast(
-        parts.length
-          ? `Import done: ${parts.join(', ')} records.`
-          : 'No changes — all data already up to date.',
-        parts.length ? 'success' : 'info',
-      );
-      event.target.value = null;
+      this.ngZone.run(() => {
+        this.dataSource.data = existingData;
+        this.deferFilterCountRefresh();
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(existingData));
+
+        console.log('Final Records Sample:', existingData[0]);
+        if (this.paginator) {
+          this.paginator.firstPage();
+        }
+        const parts: string[] = [];
+        if (addedCount > 0) parts.push(`${addedCount} new`);
+        if (updatedCount > 0) parts.push(`${updatedCount} updated`);
+        this.showToast(
+          parts.length
+            ? `Import done: ${parts.join(', ')} records.`
+            : 'No changes — all data already up to date.',
+          parts.length ? 'success' : 'info',
+        );
+        event.target.value = null;
+        setTimeout(() => {
+          this.importInProgress = false;
+        }, 2000);
+      });
     };
     reader.readAsArrayBuffer(target.files[0]);
   }
@@ -1896,7 +1902,9 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     reader.onload = async (e: any) => {
       this.importInProgress = true;
       const endImport = () => {
-        this.importInProgress = false;
+        setTimeout(() => {
+          this.importInProgress = false;
+        }, 2000);
       };
       const dataBuffer = e.target.result;
       const wb: XLSX.WorkBook = XLSX.read(dataBuffer, {
